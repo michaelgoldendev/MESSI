@@ -1,0 +1,23 @@
+\documentclass[12pt]{article}
+
+\usepackage{caption}
+\usepackage{longtable}
+\usepackage{colortbl} 
+\usepackage{xcolor} 
+\usepackage{booktabs}
+\usepackage{pdflscape}
+
+\begin{document}
+	\begin{longtable}{ccccccc}
+		\captionsetup{justification=centering}
+		\caption{\label{tab:rankingshape} Consensus structure ranking. Substructures ranked from highest to lowest z-score based on the estimated degrees of coevolution within them.}\\
+		\toprule
+		Rank & Alignment position & Mapped position & Length & Name & Median & z-score\\
+		\midrule
+		\endfirsthead
+		\toprule
+		Rank & Alignment position  & Mapped position & Length & Name & Median & z-score\\
+		\midrule
+		\endhead
+#INSERT#	\end{longtable}
+\end{document}
