@@ -16,7 +16,7 @@ cd /path_to_messi/MESSI/
 By default MESSI will create a `results` folder in `/path_to_messi/MESSI/results/example/`
 
 ### Creating results files:
-MESSI can take a long time to run, but will save it's state as it runs, to produce intermediate results: execute MESSI using the same command as before, but using the `--processmax` flag. This will produce a set of results using the intermediate state. For example:
+MESSI can take a long time to run, but will save it's state as it runs. To produce intermediate results: execute MESSI using the same command as before, but using the `--processmax` flag. This will produce a set of results using the intermediate state. For example:
 ```
 /path_to_julia/bin/julia src/MESSI.jl --alignment /path_to_alignment/example.fas --processmax
 ```
