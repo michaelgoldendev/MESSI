@@ -19,6 +19,8 @@ using Distributions
 using Printf
 using CommonUtils
 
+include("StructurePlotsAndTables.jl")
+
 using ArgParse
 function parse_commandline()
     s = ArgParseSettings()
@@ -57,6 +59,9 @@ function parse_commandline()
         default = 1.0
         "--draw"
         help = ""
+        action = :store_true
+        "--full"
+        help = "Perform all Maximum Likelihood inference under all models and output Likelihood Ratio Tests"
         action = :store_true
         "--mcmc"
         help = "Perform Bayesian inference using MCMC instead of the default Maximum Likelihood inference"
@@ -434,9 +439,8 @@ function computeimportanceratio(currentlikelihoods, params::Array{Float64,1}, da
     return llsum
 end
 
-maximumZ = -Inf
 function savemaximum(Z::Float64, maxparams::Array{Float64,1}, maxfile, override::Bool=false, statuslabel::String="")
-    global maximumZ
+    maximumZ  = -Inf
     maximumparams = maxparams
 
     if isfile(maxfile)
@@ -529,8 +533,8 @@ function optimizesamplelikelihood(rng::AbstractRNG, initialparams::Array{Float64
     end
     currentlikelihoods = computesamplelikelihoods(currentparams, dataset, structures)
 
-    opt = Opt(:LN_NELDERMEAD, 20)
-    #opt = Opt(:LN_COBYLA, 20)
+    #opt = Opt(:LN_NELDERMEAD, 20)
+    opt = Opt(:LN_COBYLA, 20)
     localObjectiveFunction = ((param, grad) -> computeimportanceratio(currentlikelihoods, param, dataset, structures, siteCats, lambdaCats, fixGU, fixGCAU))
     lower = ones(Float64, 20)*0.0001
     lower[1] = 1.0
@@ -595,7 +599,7 @@ function optimizesamplelikelihood(rng::AbstractRNG, initialparams::Array{Float64
     upper[20] = 0.0001
     upper_bounds!(opt, upper)
 
-    xtol_rel!(opt,1e-5)
+    xtol_rel!(opt,1e-4)
     maxeval!(opt, maxoptiter)
     max_objective!(opt, localObjectiveFunction)
 
@@ -722,6 +726,8 @@ function unmaskarraysel(arr::Array{Float64,1}, sel::Array{Int,1}, len::Int)
 end
 
 function optimizemodel(dataset::Dataset, pairedsites::Array{Int,1}, siteCats::Int=3, lambdaCats::Int=5, fixGU::Bool=false, fixGCAU::Bool=false, integratestructure::Bool=true, unpairedmodel::Bool=false,maxoptiter::Int=1000, initparams::ModelParameters=nothing, maxfile=nothing, usecuda::Bool=true)
+    global optiter
+    optiter = 0
     global maxll
     maxll = -1e20
     fixLambdaWeight = false
@@ -809,7 +815,7 @@ function optimizemodel(dataset::Dataset, pairedsites::Array{Int,1}, siteCats::In
     upper[20] = 0.0001
     upper_bounds!(opt, upper)
 
-    xtol_rel!(opt,1e-5)
+    xtol_rel!(opt,1e-4)
     maxeval!(opt, maxoptiter)
 
     max_objective!(opt, localObjectiveFunction)
@@ -870,173 +876,6 @@ function cleandataset(fastafile, outputfile)
     return outputfile
 end
 
-function processmax2(maxfile::AbstractString, dataset::Dataset, params::ModelParameters, maxbasepairdistance::Int, usecuda::Bool, unpaired::Bool)
-    siteloglikelihoods = nothing
-    if 1 == 2
-        if usecuda
-            siteloglikelihoods = felsensteinposteriorsiterateconditionalscuda(unpairedposteriorprobs, pairedposteriorprobs,dataset, params, getmusespecificparamsarray(params))
-        else
-            siteloglikelihoods = getposteriorsiterates(unpairedposteriorprobs, pairedposteriorprobs, dataset, params, unpaired)
-        end
-
-        fout = open(string(maxfile, ".siterates.csv"),"w")
-        pairingstr = ""
-        if !parsed_args["unpaired"]
-            pairingstr = string(",\"pairing probability\"")
-        end
-        println(fout, join(AbstractString[string("\"rate=", @sprintf("%.3f", siteRate), "\"") for siteRate in  currentparams.siteRates],","),",\"Mean\"", pairingstr)
-        for i=1:dataset.numcols
-            siteposteriorprobs = zeros(Float64, currentparams.siteCats)
-            total = -Inf
-            for siteCat=1:currentparams.siteCats
-                siteposteriorprobs[siteCat] = siteloglikelihoods[siteCat, i]
-                total = CommonUtils.logsumexp(total, siteposteriorprobs[siteCat])
-            end
-            siteposteriorprobs = exp.(siteposteriorprobs-total)
-            pairingstr = ""
-            if !parsed_args["unpaired"]
-                pairingstr = string(",", 1.0 - unpairedposteriorprobs[i])
-            end
-            println(fout, join(AbstractString[string("\"", siteposteriorprobs[siteCat], "\"") for siteCat=1:currentparams.siteCats], ","),",", sum(siteposteriorprobs.*currentparams.siteRates), pairingstr)
-        end
-        close(fout)
-    end
-
-    if !unpaired
-        unpairedlogprobs = computeunpairedlikelihoods(dataset, params)
-        pairedlogprobs, ret = coevolutionall(dataset,params,true,false,true,maxbasepairdistance,usecuda)
-
-        mapping = zeros(Int,dataset.numcols)
-        revmapping = zeros(Int, dataset.numcols)
-        cutoff = 0.5
-        index = 1
-        for i=1:dataset.numcols
-            if dataset.gapfrequency[i] < cutoff
-                mapping[i] = index
-                revmapping[index] = i
-                index += 1
-            end
-        end
-        newlen = index - 1
-
-        unpairedlogprobs_trunc = ones(Float64, newlen)*-Inf
-        pairedlogprobs_trunc = ones(Float64, newlen, newlen)*-Inf
-        for i=1:dataset.numcols
-            if mapping[i] > 0
-                unpairedlogprobs_trunc[mapping[i]] = unpairedlogprobs[i]
-                for j=1:dataset.numcols
-                    if mapping[j] > 0
-                        pairedlogprobs_trunc[mapping[i],mapping[j]] = pairedlogprobs[i,j]
-                    end
-                end
-            end
-        end
-        inside = computeinsideKH99(unpairedlogprobs_trunc, pairedlogprobs_trunc, 1.0,false,usecuda)
-        outside = computeoutsideKH99(inside,unpairedlogprobs_trunc, pairedlogprobs_trunc, usecuda)
-        unpairedposteriorprobs_trunc,pairedposteriorprobs_trunc = computebasepairprobs(inside, outside, unpairedlogprobs_trunc, pairedlogprobs_trunc, KH99())
-        paired_trunc = getPosteriorDecodingConsensusStructure(pairedposteriorprobs_trunc, unpairedposteriorprobs_trunc, usecuda)
-
-        paired = zeros(Int, dataset.numcols)
-        for i=1:dataset.numcols
-            if mapping[i] > 0
-                if paired_trunc[mapping[i]] > 0
-                    paired[i] = revmapping[paired_trunc[mapping[i]]]
-                end
-            end
-        end
-        consensus = copy(paired)
-        unpairedposteriorprobs = zeros(Float64, dataset.numcols)
-        pairedposteriorprobs = zeros(Float64, dataset.numcols, dataset.numcols)
-        for i=1:dataset.numcols
-            if mapping[i] > 0
-                unpairedposteriorprobs[i] = unpairedposteriorprobs_trunc[mapping[i]]
-                for j=1:dataset.numcols
-                    if mapping[j] > 0
-                        pairedposteriorprobs[i,j] = pairedposteriorprobs_trunc[mapping[i],mapping[j]]
-                    end
-                end
-            end
-        end
-
-        #inside = computeinsideKH99(unpairedlogprobs, pairedlogprobs, 1.0,false,usecuda)
-        #outside = computeoutsideKH99(inside,unpairedlogprobs, pairedlogprobs, usecuda)
-        #unpairedposteriorprobs,pairedposteriorprobs = computebasepairprobs(inside, outside, unpairedlogprobs, pairedlogprobs, KH99())
-        fout = open(string(maxfile, ".posteriorunpaired"),"w")
-        println(fout,unpairedposteriorprobs)
-        close(fout)
-        fout = open(string(maxfile, ".posteriorpaired"),"w")
-        println(fout,printmatrix(pairedposteriorprobs))
-        close(fout)
-
-        ematrix = nothing
-        smatrix = nothing
-        #consensus = getPosteriorDecodingConsensusStructure(pairedposteriorprobs, unpairedposteriorprobs, usecuda)
-        fout = open(string(maxfile, ".consensus.dbn"),"w")
-        println(fout, getdotbracketstring(consensus))
-        close(fout)
-        writectfile(consensus, repeat("N", length(consensus)), string(maxfile, ".consensus.ct"))
-
-        pairedlogprobs, ret = coevolutionall(dataset,params,true,true,true,maxbasepairdistance,usecuda)
-
-        museparams = getmusespecificparamsarray(params)
-        posteriorcoevolving = zeros(Float64, dataset.numcols, dataset.numcols)
-        posteriormeanlambda = zeros(Float64, dataset.numcols, dataset.numcols)
-        bayesfactorcoevolving = zeros(Float64, dataset.numcols, dataset.numcols)
-        for i=1:dataset.numcols
-            posteriorcoevolving[i,i] = 0.0
-            for j=i+1:dataset.numcols
-                posteriormeanlambda[i,j] = 0.0
-                for k=1:length(museparams)
-                    posteriormeanlambda[i,j] += museparams[k].lambdarate*exp(ret[k][i,j]-pairedlogprobs[i,j])
-                    posteriormeanlambda[j,i] = posteriormeanlambda[i,j]
-                    #println(k,"\t",ret[k][i,j],"\t",pairedlogprobs[i,j], "\t", exp(ret[k][i,j]-pairedlogprobs[i,j]))
-                end
-                postprob = exp(ret[1][i,j]-pairedlogprobs[i,j])
-                bf = (postprob/(1.0-postprob))/(params.lambdazeroweight/(1.0-params.lambdazeroweight))
-                bayesfactorcoevolving[i,j] = 1.0/bf
-                bayesfactorcoevolving[j,i] = 1.0/bf
-                posteriorcoevolving[i,j] = 1.0 - exp(ret[1][i,j]-pairedlogprobs[i,j])
-                posteriorcoevolving[j,i] = posteriorcoevolving[i,j]
-            end
-        end
-        fout = open(string(maxfile, ".consensus.bp"),"w")
-        for i=1:length(consensus)
-            bp = "-\t-\t-\t-"
-            if consensus[i] > 0
-                #println(pairedposteriorprobs[i,consensus[i]])
-                #println(posteriorcoevolving[i,consensus[i]])
-                #println(bayesfactorcoevolving[i,consensus[i]])
-                #println(posteriormeanlambda[i,consensus[i]])
-                bp = string(@sprintf("%.4f", pairedposteriorprobs[i,consensus[i]]), "\t", @sprintf("%.4f", posteriorcoevolving[i,consensus[i]]), "\t", @sprintf("%.4e", bayesfactorcoevolving[i,consensus[i]]), "\t", @sprintf("%.4f", posteriormeanlambda[i,consensus[i]]))
-            end
-            println(fout, i,"\t", consensus[i], "\t", @sprintf("%.4f", unpairedposteriorprobs[i]), "\t", bp, "\t", @sprintf("%.4f", maximum(pairedposteriorprobs[i,:])))
-        end
-        close(fout)
-        cutoff = 0.001
-        fout = open(string(maxfile,"_", cutoff, ".csv"),"w")
-        println(fout, "\"i\",\"j\",\"paired(i)\",\"paired(j)\",\"paired(i,j)\",\"p(lambda>0)\",\"meanlambda\",\"bayesfactor(lambda>0)\"")
-        for i=1:dataset.numcols
-            for j=i+1:dataset.numcols
-                if pairedposteriorprobs[i,j] >= cutoff
-                    println(fout,"\"",i,"\",\"",j,"\",\"",1.0-unpairedposteriorprobs[i],"\",\"",1.0-unpairedposteriorprobs[j],"\",\"",pairedposteriorprobs[i,j],"\",\"",posteriorcoevolving[i,j],"\",\"",posteriormeanlambda[i,j],"\",\"",bayesfactorcoevolving[i,j],"\"")
-                end
-            end
-        end
-        close(fout)
-
-
-        fout = open(string(maxfile, ".posteriorcoevolving"),"w")
-        println(fout,printmatrix(posteriorcoevolving))
-        close(fout)
-        fout = open(string(maxfile, ".posteriormeanlambda"),"w")
-        println(fout,printmatrix(posteriormeanlambda))
-        close(fout)
-        fout = open(string(maxfile, ".bayesfactorcoevolving"),"w")
-        println(fout,printmatrix(bayesfactorcoevolving))
-        close(fout)
-    end
-end
-
 function processmax(outputprefix, alignmentfile, maxfile::AbstractString, dataset::Dataset, params::ModelParameters, maxbasepairdistance::Int, usecuda::Bool, unpaired::Bool)
     siteloglikelihoods = nothing
     if 1 == 2
@@ -1048,7 +887,7 @@ function processmax(outputprefix, alignmentfile, maxfile::AbstractString, datase
 
         fout = open(string(maxfile, ".siterates.csv"),"w")
         pairingstr = ""
-        if !parsed_args["unpaired"]
+        if !run_args["unpaired"]
             pairingstr = string(",\"pairing probability\"")
         end
         println(fout, join(AbstractString[string("\"rate=", @sprintf("%.3f", siteRate), "\"") for siteRate in  currentparams.siteRates],","),",\"Mean\"", pairingstr)
@@ -1061,7 +900,7 @@ function processmax(outputprefix, alignmentfile, maxfile::AbstractString, datase
             end
             siteposteriorprobs = exp.(siteposteriorprobs-total)
             pairingstr = ""
-            if !parsed_args["unpaired"]
+            if !run_args["unpaired"]
                 pairingstr = string(",", 1.0 - unpairedposteriorprobs[i])
             end
             println(fout, join(AbstractString[string("\"", siteposteriorprobs[siteCat], "\"") for siteCat=1:currentparams.siteCats], ","),",", sum(siteposteriorprobs.*currentparams.siteRates), pairingstr)
@@ -1248,8 +1087,66 @@ function computemaxstructure(dataset::Dataset, params::ModelParameters, maxbasep
     end
 end
 
+function likelihoodratiotests(outputprefix)
+    try
+        outputdir = dirname(outputprefix)
+        csvfile = abspath(joinpath(outputdir,"likelihoodratiotests.csv"))
+        fout = open(csvfile, "w")
+        write(fout, printaictablescsv(String[outputprefix]))
+        close(fout)
+        exit()
+
+        template = read(open(joinpath(@__DIR__,"likelihoodratiotests_template.tex"),"r"), String)
+
+        texfile = abspath(joinpath(outputdir,"likelihoodratiotests.tex"))
+        fout = open(texfile,"w")
+        write(fout, replace(template, "#INSERT#" => printaictables(String[outputprefix])))
+        close(fout)
+        run(`pdflatex -output-directory="$(abspath(joinpath(outputdir)))" $(texfile)`)
+        rm(joinpath(outputdir,"likelihoodratiotests.aux"))
+        rm(joinpath(outputdir,"likelihoodratiotests.log"))
+    catch
+
+    end
+end
+
 function main()
     parsed_args = parse_commandline()
+    run_args_list = [deepcopy(parsed_args)]
+
+    if parsed_args["full"]
+        run_args_list = []
+
+        args = deepcopy(parsed_args)
+        args["unpaired"] = true
+        args["fixgcau"] = false
+        args["fixgu"] = false
+        push!(run_args_list, args)
+
+        args = deepcopy(parsed_args)
+        args["unpaired"] = false
+        args["fixgcau"] = true
+        args["fixgu"] = true
+        push!(run_args_list, args)
+
+        args = deepcopy(parsed_args)
+        args["unpaired"] = false
+        args["fixgcau"] = true
+        args["fixgu"] = false
+        push!(run_args_list, args)
+
+        args = deepcopy(parsed_args)
+        args["unpaired"] = false
+        args["fixgcau"] = false
+        args["fixgu"] = true
+        push!(run_args_list, args)
+
+        args = deepcopy(parsed_args)
+        args["unpaired"] = false
+        args["fixgcau"] = false
+        args["fixgu"] = false
+        push!(run_args_list, args)
+    end
 
     seed1 = parsed_args["seed"]
     rng = MersenneTwister(seed1)
@@ -1276,322 +1173,330 @@ function main()
         alignmentfilein = shufflealignment(rng, alignmentfilein, string(outputprefix, ".fas"))
     end
     alignmentfile = cleandataset(alignmentfilein, string(outputprefix,".fas.norm"))
-    mcmclogfile = string(outputprefix,".log")
-    if parsed_args["tree"] == nothing
-        treefile = "$outputprefix.nwk"
-        newickstring, treepath = Binaries.fasttreegtr(alignmentfile)
-        fout = open(treefile,"w")
-        println(fout, newickstring)
-        close(fout)
-    else
-        treefile = parsed_args["tree"]
-    end
-    grammar = KH99()
 
-    dataset = Dataset(getalignmentfromfastaandnewick(alignmentfile,treefile))
+    likelihoodratiotests(outputprefix)
 
-
-    mode = MODE_IO_SAMPLE
-    #mode = MODE_VIENNA_SAMPLE
-    if parsed_args["structure"] != nothing
-        sequence, pairedsites, mapping, revmapping = mapstructure(dataset,alignmentfile,parsed_args["structure"])
-        mode = MODE_FIXED_STRUCTURE
-        println("MODE_FIXED_STRUCTURE")
-    end
-
-    M = parsed_args["M"]
-
-    lambdaCats = parsed_args["numlambdacats"]
-    lambdarates = ones(Float64,lambdaCats)
-    lambdaweights = ones(Float64,length(lambdarates)) / length(lambdarates)
-
-    samplebranchlengths = false
-    currentparams = ModelParameters(dataset.obsfreqs, 8.0, 4.0, 2.0, 1.0, 5.0, 1.0, 1.0, 5.0, 0.25, getnodelist(dataset.root), 0.5, lambdarates, lambdaweights)
-    currentparams.lambdaCats = lambdaCats - 1
-    #currentparams.lambdaweightsGC, currentparams.lambdaratesGC = discretizegamma2(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeGC, currentparams.lambdaGammaScaleGC, currentparams.lambdaCats)
-    #currentparams.lambdaweightsAT, currentparams.lambdaratesAT = discretizegamma2(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeAT, currentparams.lambdaGammaScaleAT, currentparams.lambdaCats)
-    #currentparams.lambdaweightsGT, currentparams.lambdaratesGT = discretizegamma2(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeGT, currentparams.lambdaGammaScaleGT, currentparams.lambdaCats)
-    currentparams.lambdaweightsGC, currentparams.lambdaratesGC, currentparams.lambdaweightsAT, currentparams.lambdaratesAT, currentparams.lambdaweightsGT, currentparams.lambdaratesGT = discretizegamma3(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeGC, currentparams.lambdaGammaShapeAT, currentparams.lambdaGammaShapeGT, currentparams.lambdaGammaScaleGC, currentparams.lambdaCats)
-    siteCats = parsed_args["numsitecats"]
-    currentparams.siteCats = siteCats
-    currentparams.siteWeights = ones(Float64,currentparams.siteCats)/currentparams.siteCats
-    currentparams.siteRates = discretizegamma(currentparams.siteGammaShape, currentparams.siteGammaScale, currentparams.siteCats)
-    currentparams.states = Int[rand(rng,1:currentparams.siteCats) for i=1:dataset.numcols]
-    currentparams.pairedstates = Int[rand(rng,1:lambdaCats) for i=1:dataset.numcols]
-
-
-    initialparams = Float64[2.0,2.0,2.0,1.7487740904105369,4.464074402974858,1.6941505179847807,0.4833108030758708,5.839004646491171,0.7168678100059017,1.0,0.6118067582467858,0.23307618715645315,0.2631203272837885,0.2430685428508905,0.5,1.0,1.0,1.0,1.0,1.0]
-    initialparams[10] = 1.0
-    initialparams[16] = 1.0
-    initialparams[17] = 1.0
-    initialparams[18] = 1.0
-    initialparams[19] = 1.0
-    initialparams[20] = 1.0
-
-
-    maxbasepairdistance = parsed_args["maxbasepairdistance"]
-
-    integratesiterates = true
-    integratestructure = false
-
-    maxfile = string(outputprefix, ".max")
-    maxfileold = string(outputprefixold,".max")
-    maxfileunpaired = string(outputprefix, ".max.unpaired")
-    if isfile(maxfile)
-        jsondict = JSON.parsefile(maxfile)
-        initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
-    elseif isfile(maxfileold)
-        jsondict = JSON.parsefile(maxfileold)
-        initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
-    elseif isfile(maxfileunpaired)
-        jsondict = JSON.parsefile(maxfileunpaired)
-        initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
-        #initialparams[10] = 5.0/10.0
-        initialparams[10] = 5.0
-        initialparams[16] = 0.25
-        #initialparams[17] = 3.0/10.0
-        initialparams[17] = 3.0
-        initialparams[18] = 10.0
-        #initialparams[19] = 1.0/10.0
-        initialparams[19] = 2.0
-        initialparams[20] = 10.0
-    end
-    currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
-
-    if parsed_args["fixgcau"] && parsed_args["fixgu"]
-        maxfile = string(outputprefix, ".fixgcaugu.max")
-        if isfile(maxfile)
-            jsondict = JSON.parsefile(maxfile)
-            initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
-        end
-        currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
-        #currentparams.lambdazeroweight = max(currentparams.lambdazeroweight, 0.05)
-    elseif parsed_args["fixgcau"]
-        maxfile = string(outputprefix, ".fixgcau.max")
-        if isfile(maxfile)
-            jsondict = JSON.parsefile(maxfile)
-            initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
-        end
-        currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
-        #currentparams.lambdazeroweight = max(currentparams.lambdazeroweight, 0.05)
-    elseif parsed_args["fixgu"]
-        maxfile = string(outputprefix, ".fixgu.max")
-        if isfile(maxfile)
-            jsondict = JSON.parsefile(maxfile)
-            initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
-        end
-        currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
-        #currentparams.lambdazeroweight = max(currentparams.lambdazeroweight, 0.05)
-    end
-    if parsed_args["shuffle"]
-        currentparams.lambdazeroweight = 0.50
-    end
-    if parsed_args["unpaired"]
-        maxfile = string(outputprefix, ".max.unpaired")
-        if isfile(maxfile)
-            jsondict = JSON.parsefile(maxfile)
-            initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
-        end
-        currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
-    end
-
-    if parsed_args["processmax"]
-        if parsed_args["structure"] != nothing
-            processmax(outputprefix, alignmentfile, maxfile, dataset, currentparams, pairedsites, mapping, usecuda)
-        else
-            processmax(outputprefix, alignmentfile, maxfile, dataset, currentparams, maxbasepairdistance, usecuda, parsed_args["unpaired"])
-        end
-        exit()
-    end
-
-    if parsed_args["maxstructure"]
-        println("Computing maximum likelihood structure")
-        maxstructure_trunc = computemaxstructure(dataset, currentparams, maxbasepairdistance, usecuda,true)
-        writectfile(maxstructure_trunc, replace(dataset.sequences[1], "-" => "N"), string(outputprefix, ".maxstructuretrunc"))
-        maxstructure = computemaxstructure(dataset, currentparams, maxbasepairdistance, usecuda)
-        writectfile(maxstructure, replace(dataset.sequences[1], "-" => "N"), string(outputprefix, ".maxstructure"))
-        exit()
-    end
-
-    if parsed_args["calcentropy"] || parsed_args["calcpriorentropy"]
-        initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
-        currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
-        println("PARAMS",initialparams)
-        h, hmax = computeinformationentropy(dataset, currentparams, maxbasepairdistance, usecuda)
-        #println("H=", h)
-        H, Hstdev, Hstderr, Hmax, perc = estimateinformationentropy(rng, dataset, currentparams, maxbasepairdistance, usecuda, parsed_args["calcpriorentropy"])
-        jsondict2 = Dict()
-        jsondict2["params"] = initialparams
-        jsondict2["H"] = H
-        jsondict2["Hstdev"] = Hstdev
-        jsondict2["Hstderr"] = Hstderr
-        jsondict2["Hmax"] = Hmax
-        jsondict2["percentage"] = perc
-        jsondict2["length"] = dataset.numcols
-        entropyfile =  string(outputprefix, ".entropy")
-        if parsed_args["fixgu"]
-            entropyfile = string(outputprefix, ".fixgu.entropy")
-        end
-        if parsed_args["calcpriorentropy"]
-            entropyfile =  string(outputprefix, ".entropyprior")
-        end
-        out = open(entropyfile,"w")
-        ret = replace(JSON.json(jsondict2),",\"" => ",\n\"")
-        ret = replace(ret, "],[" => "],\n[")
-        ret = replace(ret, "{" => "{\n")
-        ret = replace(ret, "}" => "\n}")
-        write(out,ret)
-        close(out)
-
-        println("Entropy = ", H)
-        #println("Entropy est ", hest)
-        println("Max. entropy = ", Hmax)
-        println("Norm. entropy = ", perc)
-        exit()
-    end
-
-    optimize = !parsed_args["mcmc"]
-    if optimize
-        fixGU = parsed_args["fixgu"]
-        fixGCAU = parsed_args["fixgcau"]
-        integratestructure = parsed_args["structure"] == nothing
-        unpairedmodel = parsed_args["unpaired"]
-        if integratestructure && unpairedmodel
-            integratestructure = false
-        end
-
-        if integratestructure
-            maxoptiter = parsed_args["maxmcemiter"]
-            samplesperiter = parsed_args["samplesperiter"]
-            if samplesperiter > 0
-                println("MCEM")
-                currentparams = mcem(dataset, siteCats, lambdaCats, fixGU, fixGCAU, unpairedmodel,maxoptiter,samplesperiter,maxbasepairdistance,currentparams, maxfile, usecuda)
-            else
-                currentparams = optimizemodel(dataset, (parsed_args["structure"] == nothing ? zeros(Int,dataset.numcols) : pairedsites), siteCats, lambdaCats, fixGU,fixGCAU, true, unpairedmodel,2000,currentparams, maxfile, usecuda)
-            end
-        else
-            maxoptiter = 2000
-            currentparams = optimizemodel(dataset,  (parsed_args["structure"] == nothing ? zeros(Int,dataset.numcols) : pairedsites), siteCats,lambdaCats,fixGU,fixGCAU,integratestructure,unpairedmodel,maxoptiter,currentparams, maxfile, usecuda)
-        end
-        exit()
-    end
-
-    if parsed_args["mcmc"]
-        parameterisation = 0
-        if parameterisation == 1
-            gammameanGC = currentparams.lambdaGammaShapeGC*currentparams.lambdaGammaScaleGC
-            #currentparams.lambdaGammaScaleGC = gammameanGC/currentparams.lambdaGammaScaleGC
-            currentparams.lambdaGammaShapeGC = gammameanGC
-
-            gammameanAT = currentparams.lambdaGammaShapeAT*currentparams.lambdaGammaScaleGC
-            #currentparams.lambdaGammaScaleAT = gammameanAT/currentparams.lambdaGammaScaleAT
-            currentparams.lambdaGammaShapeAT = gammameanAT
-
-            gammameanGT = currentparams.lambdaGammaShapeGT*currentparams.lambdaGammaScaleGC
-            #currentparams.lambdaGammaScaleGT = gammameanGT/currentparams.lambdaGammaScaleGT
-            currentparams.lambdaGammaShapeGT = gammameanGT
-        end
-        currentparams.lambdaweightsGC, currentparams.lambdaratesGC, currentparams.lambdaweightsAT, currentparams.lambdaratesAT, currentparams.lambdaweightsGT, currentparams.lambdaratesGT = discretizegamma3(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeGC, currentparams.lambdaGammaShapeAT, currentparams.lambdaGammaShapeGT, currentparams.lambdaGammaScaleGC, currentparams.lambdaCats, parameterisation)
-        proposedparams = deepcopy(currentparams)
-
-
-        inside = zeros(Float64,1,1,1)
-        if mode == MODE_IO_SAMPLE
-            fout = open(string(outputprefix, ".calculations"), "w")
-            computations = countcomputations(dataset, maxbasepairdistance)
-            write(fout, string(computations, "\n"))
-            write(fout, string(dataset.numseqs,"\t", dataset.numcols,"\n"))
-            write(fout, string(@sprintf("%.3f", computations[6]), "\n"))
-            write(fout, string(@sprintf("%.2f", 1.0/computations[6]), "\n"))
+    for run_args in run_args_list
+        mcmclogfile = string(outputprefix,".log")
+        if run_args["tree"] == nothing
+            treefile = "$outputprefix.nwk"
+            newickstring, treepath = Binaries.fasttreegtr(alignmentfile)
+            fout = open(treefile,"w")
+            println(fout, newickstring)
             close(fout)
+        else
+            treefile = run_args["tree"]
+        end
+        grammar = KH99()
+        dataset = Dataset(getalignmentfromfastaandnewick(alignmentfile,treefile))
 
-            unpairedlogprobs = computeunpairedlikelihoods(dataset, currentparams)
-            museparams = getmusespecificparamsarray(currentparams)
-            #tic()
-            pairedlogprobs, ret = coevolutionall(dataset,currentparams,true,false,true,maxbasepairdistance,usecuda)
-            maskgapped!(pairedlogprobs,dataset.gapfrequency,0.5,-Inf)
-            inside = computeinsideKH99(unpairedlogprobs, pairedlogprobs, 1.0,false,usecuda)
-            savemaximum(inside[1,1,dataset.numcols], getparamsvector(currentparams), maxfile)
-            #elapsed = toc();
-            #println("MCMC initialised: ", elapsed)
+
+        mode = MODE_IO_SAMPLE
+        #mode = MODE_VIENNA_SAMPLE
+        if run_args["structure"] != nothing
+            sequence, pairedsites, mapping, revmapping = mapstructure(dataset,alignmentfile,run_args["structure"])
+            mode = MODE_FIXED_STRUCTURE
+            println("MODE_FIXED_STRUCTURE")
         end
 
-        thermodynamicsamples = Dict{Int, Array{Array{Int,1}}}()
+        M = run_args["M"]
 
-        #Bs = [1.0]
-        Bs = [parsed_args["bfactor"]^(z-1.0) for z=1:parsed_args["numchains"]]
+        lambdaCats = run_args["numlambdacats"]
+        lambdarates = ones(Float64,lambdaCats)
+        lambdaweights = ones(Float64,length(lambdarates)) / length(lambdarates)
 
-        if samplebranchlengths
-            currentparams.q6 = 1.0
+        samplebranchlengths = false
+        currentparams = ModelParameters(dataset.obsfreqs, 8.0, 4.0, 2.0, 1.0, 5.0, 1.0, 1.0, 5.0, 0.25, getnodelist(dataset.root), 0.5, lambdarates, lambdaweights)
+        currentparams.lambdaCats = lambdaCats - 1
+        #currentparams.lambdaweightsGC, currentparams.lambdaratesGC = discretizegamma2(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeGC, currentparams.lambdaGammaScaleGC, currentparams.lambdaCats)
+        #currentparams.lambdaweightsAT, currentparams.lambdaratesAT = discretizegamma2(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeAT, currentparams.lambdaGammaScaleAT, currentparams.lambdaCats)
+        #currentparams.lambdaweightsGT, currentparams.lambdaratesGT = discretizegamma2(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeGT, currentparams.lambdaGammaScaleGT, currentparams.lambdaCats)
+        currentparams.lambdaweightsGC, currentparams.lambdaratesGC, currentparams.lambdaweightsAT, currentparams.lambdaratesAT, currentparams.lambdaweightsGT, currentparams.lambdaratesGT = discretizegamma3(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeGC, currentparams.lambdaGammaShapeAT, currentparams.lambdaGammaShapeGT, currentparams.lambdaGammaScaleGC, currentparams.lambdaCats)
+        siteCats = run_args["numsitecats"]
+        currentparams.siteCats = siteCats
+        currentparams.siteWeights = ones(Float64,currentparams.siteCats)/currentparams.siteCats
+        currentparams.siteRates = discretizegamma(currentparams.siteGammaShape, currentparams.siteGammaScale, currentparams.siteCats)
+        currentparams.states = Int[rand(rng,1:currentparams.siteCats) for i=1:dataset.numcols]
+        currentparams.pairedstates = Int[rand(rng,1:lambdaCats) for i=1:dataset.numcols]
+
+
+        initialparams = Float64[2.0,2.0,2.0,1.7487740904105369,4.464074402974858,1.6941505179847807,0.4833108030758708,5.839004646491171,0.7168678100059017,1.0,0.6118067582467858,0.23307618715645315,0.2631203272837885,0.2430685428508905,0.5,1.0,1.0,1.0,1.0,1.0]
+        initialparams[10] = 1.0
+        initialparams[16] = 1.0
+        initialparams[17] = 1.0
+        initialparams[18] = 1.0
+        initialparams[19] = 1.0
+        initialparams[20] = 1.0
+
+
+        maxbasepairdistance = run_args["maxbasepairdistance"]
+
+        integratesiterates = true
+        integratestructure = false
+
+        maxfile = string(outputprefix, ".max")
+        maxfileold = string(outputprefixold,".max")
+        maxfileunpaired = string(outputprefix, ".max.unpaired")
+        if isfile(maxfile)
+            jsondict = JSON.parsefile(maxfile)
+            initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
+        elseif isfile(maxfileold)
+            jsondict = JSON.parsefile(maxfileold)
+            initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
+        elseif isfile(maxfileunpaired)
+            jsondict = JSON.parsefile(maxfileunpaired)
+            initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
+            #initialparams[10] = 5.0/10.0
+            initialparams[10] = 5.0
+            initialparams[16] = 0.25
+            #initialparams[17] = 3.0/10.0
+            initialparams[17] = 3.0
+            initialparams[18] = 10.0
+            #initialparams[19] = 1.0/10.0
+            initialparams[19] = 2.0
+            initialparams[20] = 10.0
         end
-        chains = Chain[]
-        id = 1
-        for B in Bs
-            if mode == MODE_IO_SAMPLE
-                chain = Chain(id, B, MersenneTwister(rand(rng,1:typemax(Int64))), 0.0, 0.0, currentparams, zeros(Int,dataset.numcols), copy(inside), pairedlogprobs, unpairedlogprobs, copy(inside), copy(pairedlogprobs), copy(unpairedlogprobs), deepcopy(currentparams))
-                chain.pairedlogprior = samplestructure(chain.rng, chain.inside, chain.pairedlogprobs, chain.unpairedlogprobs, 1, dataset.numcols, chain.paired, grammar, chain.B)
-            elseif mode == MODE_VIENNA_SAMPLE
-                chain = Chain(id, B, MersenneTwister(rand(rng,1:typemax(Int64))), 0.0, 0.0, currentparams, zeros(Int,dataset.numcols), zeros(Float64,1,1,1), zeros(Float64,1,1), zeros(Float64,1))
-                chain.paired = samplethermodynamic(thermodynamicsamples, rng,dataset.sequences)
+        currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
+
+        if run_args["fixgcau"] && run_args["fixgu"]
+            maxfile = string(outputprefix, ".fixgcaugu.max")
+            if isfile(maxfile)
+                jsondict = JSON.parsefile(maxfile)
+                initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
+            end
+            currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
+            #currentparams.lambdazeroweight = max(currentparams.lambdazeroweight, 0.05)
+        elseif run_args["fixgcau"]
+            maxfile = string(outputprefix, ".fixgcau.max")
+            if isfile(maxfile)
+                jsondict = JSON.parsefile(maxfile)
+                initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
+            end
+            currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
+            #currentparams.lambdazeroweight = max(currentparams.lambdazeroweight, 0.05)
+        elseif run_args["fixgu"]
+            maxfile = string(outputprefix, ".fixgu.max")
+            if isfile(maxfile)
+                jsondict = JSON.parsefile(maxfile)
+                initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
+            end
+            currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
+            #currentparams.lambdazeroweight = max(currentparams.lambdazeroweight, 0.05)
+        end
+        if run_args["shuffle"]
+            currentparams.lambdazeroweight = 0.50
+        end
+        if run_args["unpaired"]
+            maxfile = string(outputprefix, ".max.unpaired")
+            if isfile(maxfile)
+                jsondict = JSON.parsefile(maxfile)
+                initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
+            end
+            currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
+        end
+
+        if run_args["processmax"]
+            if run_args["structure"] != nothing
+                processmax(outputprefix, alignmentfile, maxfile, dataset, currentparams, pairedsites, mapping, usecuda)
             else
-                chain = Chain(id, B, MersenneTwister(rand(rng,1:typemax(Int64))), 0.0, 0.0, currentparams, zeros(Int,dataset.numcols), zeros(Float64,1,1,1), zeros(Float64,1,1), zeros(Float64,1), zeros(Float64,1,1,1), zeros(Float64,1,1), zeros(Float64,1), deepcopy(currentparams))
-                chain.paired = copy(pairedsites)
+                processmax(outputprefix, alignmentfile, maxfile, dataset, currentparams, maxbasepairdistance, usecuda, run_args["unpaired"])
             end
-            chain.currentll = computetotallikelihood(chain.rng, dataset, chain.currentparams, chain.paired, samplebranchlengths,integratesiterates,integratestructure, M)
-            chain.proposedll = chain.currentll
-            push!(chains, chain)
-            id += 1
+            exit()
         end
 
-
-        burnins = Int[250, 500, 1000, 1500, 2000,2500, 3000, 4000,5000,6000, 7500, 9000, 10000]
-        if samplebranchlengths
-            burnins = Int[max(1500,dataset.numseqs*100),max(4500,dataset.numseqs*300)]
+        if run_args["maxstructure"]
+            println("Computing maximum likelihood structure")
+            maxstructure_trunc = computemaxstructure(dataset, currentparams, maxbasepairdistance, usecuda,true)
+            writectfile(maxstructure_trunc, replace(dataset.sequences[1], "-" => "N"), string(outputprefix, ".maxstructuretrunc"))
+            maxstructure = computemaxstructure(dataset, currentparams, maxbasepairdistance, usecuda)
+            writectfile(maxstructure, replace(dataset.sequences[1], "-" => "N"), string(outputprefix, ".maxstructure"))
+            exit()
         end
-        if length(burnins) > 0
-            burnindata = zeros(Float64,burnins[end],10)
+
+        if run_args["calcentropy"] || run_args["calcpriorentropy"]
+            initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
+            currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
+            println("PARAMS",initialparams)
+            h, hmax = computeinformationentropy(dataset, currentparams, maxbasepairdistance, usecuda)
+            #println("H=", h)
+            H, Hstdev, Hstderr, Hmax, perc = estimateinformationentropy(rng, dataset, currentparams, maxbasepairdistance, usecuda, run_args["calcpriorentropy"])
+            jsondict2 = Dict()
+            jsondict2["params"] = initialparams
+            jsondict2["H"] = H
+            jsondict2["Hstdev"] = Hstdev
+            jsondict2["Hstderr"] = Hstderr
+            jsondict2["Hmax"] = Hmax
+            jsondict2["percentage"] = perc
+            jsondict2["length"] = dataset.numcols
+            entropyfile =  string(outputprefix, ".entropy")
+            if run_args["fixgu"]
+                entropyfile = string(outputprefix, ".fixgu.entropy")
+            end
+            if run_args["calcpriorentropy"]
+                entropyfile =  string(outputprefix, ".entropyprior")
+            end
+            out = open(entropyfile,"w")
+            ret = replace(JSON.json(jsondict2),",\"" => ",\n\"")
+            ret = replace(ret, "],[" => "],\n[")
+            ret = replace(ret, "{" => "{\n")
+            ret = replace(ret, "}" => "\n}")
+            write(out,ret)
+            close(out)
+
+            println("Entropy = ", H)
+            #println("Entropy est ", hest)
+            println("Max. entropy = ", Hmax)
+            println("Norm. entropy = ", perc)
+            exit()
         end
 
+        optimize = !run_args["mcmc"]
+        if optimize
+            fixGU = run_args["fixgu"]
+            fixGCAU = run_args["fixgcau"]
+            integratestructure = run_args["structure"] == nothing
+            unpairedmodel = run_args["unpaired"]
+            if integratestructure && unpairedmodel
+                integratestructure = false
+            end
 
-
-        mcmcoptions = MCMCoptions(mode,M,samplebranchlengths,integratesiterates,integratestructure,maxbasepairdistance,usecuda)
-
-        numChains =  length(Bs)
-        swapacceptance = ones(Float64, numChains, numChains)*5e-11
-        swaptotal = ones(Float64, numChains, numChains)*1e-10
-        maxll = -Inf
-        tuningvectors = Array{Float64,1}[]
-        branchtuningvectors = Array{Float64,1}[]
-        covmat = nothing
-        for i=1:1000000
-            for chain in chains
-                covmat = runchain(10,chain, dataset, grammar, outputprefix, string(outputprefix,".B",chain.B,".M",M), mcmcoptions, burnins, burnindata, thermodynamicsamples, tuningvectors, branchtuningvectors, covmat)
-                if chain.currentll > maxll
-                    maxll = chain.currentll
+            if integratestructure
+                maxoptiter = run_args["maxmcemiter"]
+                samplesperiter = run_args["samplesperiter"]
+                if samplesperiter > 0
+                    println("Using Monte Carlo EM")
+                    currentparams = mcem(dataset, siteCats, lambdaCats, fixGU, fixGCAU, unpairedmodel,maxoptiter,samplesperiter,maxbasepairdistance,currentparams, maxfile, usecuda)
+                else
+                    currentparams = optimizemodel(dataset, (run_args["structure"] == nothing ? zeros(Int,dataset.numcols) : pairedsites), siteCats, lambdaCats, fixGU,fixGCAU, true, unpairedmodel,2000,currentparams, maxfile, usecuda)
                 end
+            else
+                maxoptiter = 2000
+                currentparams = optimizemodel(dataset,  (run_args["structure"] == nothing ? zeros(Int,dataset.numcols) : pairedsites), siteCats,lambdaCats,fixGU,fixGCAU,integratestructure,unpairedmodel,maxoptiter,currentparams, maxfile, usecuda)
             end
-            for k=1:length(chains)
-                sel = [i for i=1:numChains]
-                shuffle!(rng, sel)
-                if length(sel) > 1
-                    a = sel[1]
-                    b = sel[2]
-                    S = (chains[b].B-chains[a].B)*(chains[a].currentll + chains[a].pairedlogprior - chains[b].currentll - chains[b].pairedlogprior)
-                    if exp(S) > rand(rng)
-                        chains[a].B, chains[b].B = chains[b].B, chains[a].B
-                        chains[a].id, chains[b].id = chains[b].id, chains[a].id
-                        chains[a].logger, chains[b].logger = chains[b].logger, chains[a].logger
-                        chains[a].timings, chains[b].timings = chains[b].timings, chains[a].timings
-                        swapacceptance[chains[a].id,chains[b].id] += 1.0
-                        swapacceptance[chains[b].id,chains[a].id] += 1.0
+        end
+
+        if run_args["mcmc"]
+            parameterisation = 0
+            if parameterisation == 1
+                gammameanGC = currentparams.lambdaGammaShapeGC*currentparams.lambdaGammaScaleGC
+                #currentparams.lambdaGammaScaleGC = gammameanGC/currentparams.lambdaGammaScaleGC
+                currentparams.lambdaGammaShapeGC = gammameanGC
+
+                gammameanAT = currentparams.lambdaGammaShapeAT*currentparams.lambdaGammaScaleGC
+                #currentparams.lambdaGammaScaleAT = gammameanAT/currentparams.lambdaGammaScaleAT
+                currentparams.lambdaGammaShapeAT = gammameanAT
+
+                gammameanGT = currentparams.lambdaGammaShapeGT*currentparams.lambdaGammaScaleGC
+                #currentparams.lambdaGammaScaleGT = gammameanGT/currentparams.lambdaGammaScaleGT
+                currentparams.lambdaGammaShapeGT = gammameanGT
+            end
+            currentparams.lambdaweightsGC, currentparams.lambdaratesGC, currentparams.lambdaweightsAT, currentparams.lambdaratesAT, currentparams.lambdaweightsGT, currentparams.lambdaratesGT = discretizegamma3(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeGC, currentparams.lambdaGammaShapeAT, currentparams.lambdaGammaShapeGT, currentparams.lambdaGammaScaleGC, currentparams.lambdaCats, parameterisation)
+            proposedparams = deepcopy(currentparams)
+
+
+            inside = zeros(Float64,1,1,1)
+            if mode == MODE_IO_SAMPLE
+                fout = open(string(outputprefix, ".calculations"), "w")
+                computations = countcomputations(dataset, maxbasepairdistance)
+                write(fout, string(computations, "\n"))
+                write(fout, string(dataset.numseqs,"\t", dataset.numcols,"\n"))
+                write(fout, string(@sprintf("%.3f", computations[6]), "\n"))
+                write(fout, string(@sprintf("%.2f", 1.0/computations[6]), "\n"))
+                close(fout)
+
+                unpairedlogprobs = computeunpairedlikelihoods(dataset, currentparams)
+                museparams = getmusespecificparamsarray(currentparams)
+                #tic()
+                pairedlogprobs, ret = coevolutionall(dataset,currentparams,true,false,true,maxbasepairdistance,usecuda)
+                maskgapped!(pairedlogprobs,dataset.gapfrequency,0.5,-Inf)
+                inside = computeinsideKH99(unpairedlogprobs, pairedlogprobs, 1.0,false,usecuda)
+                savemaximum(inside[1,1,dataset.numcols], getparamsvector(currentparams), maxfile)
+                #elapsed = toc();
+                #println("MCMC initialised: ", elapsed)
+            end
+
+            thermodynamicsamples = Dict{Int, Array{Array{Int,1}}}()
+
+            #Bs = [1.0]
+            Bs = [run_args["bfactor"]^(z-1.0) for z=1:run_args["numchains"]]
+
+            if samplebranchlengths
+                currentparams.q6 = 1.0
+            end
+            chains = Chain[]
+            id = 1
+            for B in Bs
+                if mode == MODE_IO_SAMPLE
+                    chain = Chain(id, B, MersenneTwister(rand(rng,1:typemax(Int64))), 0.0, 0.0, currentparams, zeros(Int,dataset.numcols), copy(inside), pairedlogprobs, unpairedlogprobs, copy(inside), copy(pairedlogprobs), copy(unpairedlogprobs), deepcopy(currentparams))
+                    chain.pairedlogprior = samplestructure(chain.rng, chain.inside, chain.pairedlogprobs, chain.unpairedlogprobs, 1, dataset.numcols, chain.paired, grammar, chain.B)
+                elseif mode == MODE_VIENNA_SAMPLE
+                    chain = Chain(id, B, MersenneTwister(rand(rng,1:typemax(Int64))), 0.0, 0.0, currentparams, zeros(Int,dataset.numcols), zeros(Float64,1,1,1), zeros(Float64,1,1), zeros(Float64,1))
+                    chain.paired = samplethermodynamic(thermodynamicsamples, rng,dataset.sequences)
+                else
+                    chain = Chain(id, B, MersenneTwister(rand(rng,1:typemax(Int64))), 0.0, 0.0, currentparams, zeros(Int,dataset.numcols), zeros(Float64,1,1,1), zeros(Float64,1,1), zeros(Float64,1), zeros(Float64,1,1,1), zeros(Float64,1,1), zeros(Float64,1), deepcopy(currentparams))
+                    chain.paired = copy(pairedsites)
+                end
+                chain.currentll = computetotallikelihood(chain.rng, dataset, chain.currentparams, chain.paired, samplebranchlengths,integratesiterates,integratestructure, M)
+                chain.proposedll = chain.currentll
+                push!(chains, chain)
+                id += 1
+            end
+
+
+            burnins = Int[250, 500, 1000, 1500, 2000,2500, 3000, 4000,5000,6000, 7500, 9000, 10000]
+            if samplebranchlengths
+                burnins = Int[max(1500,dataset.numseqs*100),max(4500,dataset.numseqs*300)]
+            end
+            if length(burnins) > 0
+                burnindata = zeros(Float64,burnins[end],10)
+            end
+
+
+
+            mcmcoptions = MCMCoptions(mode,M,samplebranchlengths,integratesiterates,integratestructure,maxbasepairdistance,usecuda)
+
+            numChains =  length(Bs)
+            swapacceptance = ones(Float64, numChains, numChains)*5e-11
+            swaptotal = ones(Float64, numChains, numChains)*1e-10
+            maxll = -Inf
+            tuningvectors = Array{Float64,1}[]
+            branchtuningvectors = Array{Float64,1}[]
+            covmat = nothing
+            for i=1:1000000
+                for chain in chains
+                    covmat = runchain(10,chain, dataset, grammar, outputprefix, string(outputprefix,".B",chain.B,".M",M), mcmcoptions, burnins, burnindata, thermodynamicsamples, tuningvectors, branchtuningvectors, covmat)
+                    if chain.currentll > maxll
+                        maxll = chain.currentll
                     end
-                    swaptotal[chains[a].id,chains[b].id] += 1.0
-                    swaptotal[chains[b].id,chains[a].id] += 1.0
-                    println(swapacceptance./swaptotal)
                 end
-            end
+                for k=1:length(chains)
+                    sel = [i for i=1:numChains]
+                    shuffle!(rng, sel)
+                    if length(sel) > 1
+                        a = sel[1]
+                        b = sel[2]
+                        S = (chains[b].B-chains[a].B)*(chains[a].currentll + chains[a].pairedlogprior - chains[b].currentll - chains[b].pairedlogprior)
+                        if exp(S) > rand(rng)
+                            chains[a].B, chains[b].B = chains[b].B, chains[a].B
+                            chains[a].id, chains[b].id = chains[b].id, chains[a].id
+                            chains[a].logger, chains[b].logger = chains[b].logger, chains[a].logger
+                            chains[a].timings, chains[b].timings = chains[b].timings, chains[a].timings
+                            swapacceptance[chains[a].id,chains[b].id] += 1.0
+                            swapacceptance[chains[b].id,chains[a].id] += 1.0
+                        end
+                        swaptotal[chains[a].id,chains[b].id] += 1.0
+                        swaptotal[chains[b].id,chains[a].id] += 1.0
+                        println(swapacceptance./swaptotal)
+                    end
+                end
 
+            end
         end
+    end
+
+
+    if parsed_args["full"]
+        likelihoodratiotests(outputprefix)
     end
 end
 

@@ -445,6 +445,7 @@ function felsensteincuda(dataset::Dataset, params::ModelParameters, museparams::
     #println("D5")
 
     #println("End  ", Mem.used(),"\t",Mem.total())
+    GC.gc()
     destroy!(ctx)
     synchronize(ctx)
     #unsafe_reset!(dev)
@@ -637,6 +638,7 @@ function felsensteinposteriorsiterateconditionalscuda(singleprobs::Array{Float64
         end
       end
     end
+    GC.gc()
     destroy!(ctx)
     synchronize(ctx)
     #unsafe_reset!(dev)
@@ -814,6 +816,7 @@ function felsensteincudapaired(dataset::Dataset, paired::Array{Int,1}, params::M
     Mem.free(d_logliks)
     Mem.free(store[1])
     Mem.free(d_paramlogweights)
+    GC.gc()
     destroy!(ctx)
     synchronize(ctx)
     #unsafe_reset!(dev)

@@ -113,6 +113,7 @@ function computeinsidecuda(unpairedlogprobs::Array{Float32,1}, pairedlogprobs::A
     Mem.free(d_insideL)
     Mem.free(d_insideF)
     Mem.free(d_Z)
+    GC.gc()
     destroy!(ctx)
     synchronize(ctx)
     return Float64(Zvec[1])
@@ -156,6 +157,7 @@ function computeinsidecuda(unpairedlogprobs::Array{Float32,1}, pairedlogprobs::A
     Mem.free(d_insideL)
     Mem.free(d_insideF)
     Mem.free(d_Z)
+    GC.gc()
     destroy!(ctx)
     synchronize(ctx)
     return inside
@@ -190,6 +192,7 @@ function computeposteriordecodingcuda(singleprobsin::Array{Float64,1}, pairprobs
   Mem.free(d_pairprobs)
   Mem.free(d_ematrix)
   Mem.free(d_smatrix)
+  GC.gc()
   destroy!(ctx)
   synchronize(ctx)
   return convert(Array{Float64, 2}, ematrix), convert(Array{Int, 2}, smatrix)
@@ -362,6 +365,7 @@ function computeoutsidecuda(inside::Array{Float32,3}, unpairedlogprobs::Array{Fl
     end
   end
 
+  GC.gc()
   destroy!(ctx)
   synchronize(ctx)
 

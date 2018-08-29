@@ -7,9 +7,14 @@ function rankbycoevolution(outputprefix, alignmentfile, maxfile, paired::Array{I
     if !isdir(outputdir)
         mkpath(outputdir)
     end
-    ret, finalls, texoutput = substructureranking(paired, lambdas, AbstractString[], mapping, nothing, false, false, false)
+    ret, finalls, texoutput, csv = substructureranking(paired, lambdas, AbstractString[], mapping, nothing, false, false, false)
 
     try
+        fout = open(abspath(joinpath(outputdir,"ranking.csv")), "w")
+        write(fout,"Rank,Alignment position,Mapped position,Length,Name,Median coevolution,z-score\n")
+        write(fout, csv)
+        close(fout)
+
         template = read(open(joinpath(@__DIR__,"ranking_template.tex"),"r"), String)
         output = replace(template, "#INSERT#" => texoutput)
         texfile = abspath(joinpath(outputdir,"ranking.tex"))
@@ -18,8 +23,7 @@ function rankbycoevolution(outputprefix, alignmentfile, maxfile, paired::Array{I
         write(fout, output)
         close(fout)
 
-
-        run(`pdflatex -aux-directory="$(abspath(joinpath(outputdir)))" -output-directory="$(abspath(joinpath(outputdir)))" $(texfile)`)
+        run(`pdflatex -output-directory="$(abspath(joinpath(outputdir)))" $(texfile)`)
     catch e
 
     end

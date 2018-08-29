@@ -1,7 +1,8 @@
 using PyPlot
-using Formatting
 using StatsBase
 using Distributions
+using FastaIO
+using Printf
 
 function summarizemcmc(mcmclogfile)
   fin = open(mcmclogfile,"r")
@@ -108,8 +109,8 @@ function plotstructurebenchmarks()
 
 
     for (xi, yi) in zip(x,y)
-      t = string(L"$",Formatting.fmt(".2f", yi),L"$")
-      text(xi+offsetx+0.05, 0.32, string(Formatting.fmt(".2f", yi)), fontsize=14, horizontalalignment="center")
+      t = string(L"$",@sprintf("%.2f", yi),L"$")
+      text(xi+offsetx+0.05, 0.32, string(@sprintf("%.2f", yi)), fontsize=14, horizontalalignment="center")
 
       #annotate(t, xy=[xi+offsetx;0.1],textcoords="offset points", xytext=[xi+offsetx;0.1])
       #=textcoords="offset points",
@@ -189,7 +190,7 @@ function plotratios(outputprefix)
 
 
     #v = (log10(median(x)) + 1.0) / 2.0
-    md = string(L"$\textit{Md}=",Formatting.fmt(".1f", median(x)),L"$")
+    md = string(L"$\textit{Md}=",@sprintf("%.1f", median(x)),L"$")
     #v = 0.5 + log10(median(x))/log10(16)/2.0
 
     #v = 0.5 + log10(median(x))/log10(16)/2.0
@@ -262,7 +263,7 @@ function plotdistributions(outputprefix)
       v = (log10(median(x))) / log10(xmax)
     end
     v = max(v,0.05)
-    medianstr = Formatting.fmt(".1f", median(x))
+    medianstr = @sprintf("%.1f", median(x))
     t = string(t)
     println(v)
     #=
@@ -339,8 +340,8 @@ function printtables(files)
     maxZgcaugu, maxZgcauguparams = readmaxparams(string(maxfile, ".fixgcaugu.max"))
     maxZunpaired, maxunpairedparams = readmaxparams(string(maxfile, ".max.unpaired"))
     delta = "-"
-    ret = string(ret, " & Unpaired & ", Formatting.fmt(".2f", maxZunpaired), " & ",delta," & 10 & ", " - & ", Formatting.fmt(".2f", maxunpairedparams[1]), " & ", Formatting.fmt(".2f", maxunpairedparams[2]), " & ", Formatting.fmt(".2f", maxunpairedparams[3]), "\\\\*\n")
-    delta = Formatting.fmt(".2f", maxZgu-maxZunpaired)
+    ret = string(ret, " & Unpaired & ", @sprintf("%.2f", maxZunpaired), " & ",delta," & 10 & ", " - & ", @sprintf("%.2f", maxunpairedparams[1]), " & ", @sprintf("%.2f", maxunpairedparams[2]), " & ", @sprintf("%.2f", maxunpairedparams[3]), "\\\\*\n")
+    delta = @sprintf("%.2f", maxZgu-maxZunpaired)
     pval = 1.0 - cdf(Chisq(3), maxZgu-maxZunpaired)
     pvalstr = "n.s."
     if pval < 0.01
@@ -352,8 +353,8 @@ function printtables(files)
     if pval < 0.0001
       pvalstr = "***"
     end
-    ret = string(ret, filename, " & Muse \$\\lambda_{\\text{GU}}=1\$ & ", Formatting.fmt(".2f", maxZgu), " & ",delta," & 13 & ", pvalstr, " & ", Formatting.fmt(".2f", maxZguparams[1]), " & ", Formatting.fmt(".2f", maxZguparams[2]), " & ", Formatting.fmt(".2f", maxZguparams[3]), "\\\\*\n")
-    delta = Formatting.fmt(".2f", maxZ-maxZgu)
+    ret = string(ret, filename, " & Muse \$\\lambda_{\\text{GU}}=1\$ & ", @sprintf("%.2f", maxZgu), " & ",delta," & 13 & ", pvalstr, " & ", @sprintf("%.2f", maxZguparams[1]), " & ", @sprintf("%.2f", maxZguparams[2]), " & ", @sprintf("%.2f", maxZguparams[3]), "\\\\*\n")
+    delta = @sprintf("%.2f", maxZ-maxZgu)
     pval = 1.0 - cdf(Chisq(1), maxZ-maxZgu)
     pvalstr = "n.s."
     if pval < 0.01
@@ -365,10 +366,10 @@ function printtables(files)
     if pval < 0.0001
       pvalstr = "***"
     end
-    #H = Formatting.fmt(".1f", maxZentropy["H"])
-    #H = Formatting.fmt(".1f", maxZentropy["H"])
+    #H = @sprintf("%.1f", maxZentropy["H"])
+    #H = @sprintf("%.1f", maxZentropy["H"])
 
-    ret = string(ret, " & Muse unconstrained & ", Formatting.fmt(".2f", maxZ), " & ",delta," & 14 & ", pvalstr, " & ", Formatting.fmt(".2f", maxparams[1]), " & ", Formatting.fmt(".2f", maxparams[2]), " & ", Formatting.fmt(".2f", maxparams[3]), "\\tabularnewline\n")
+    ret = string(ret, " & Muse unconstrained & ", @sprintf("%.2f", maxZ), " & ",delta," & 14 & ", pvalstr, " & ", @sprintf("%.2f", maxparams[1]), " & ", @sprintf("%.2f", maxparams[2]), " & ", @sprintf("%.2f", maxparams[3]), "\\tabularnewline\n")
 
 
     #\rowcolor{black!20} Unpaired & -15618.34 & - & 10 & - & 1.00 & 1.00 & 1.00 & 1.53 & 2.46 & 1.87 &  1.28 & 3.50 &  1.74\tabularnewline
@@ -380,8 +381,8 @@ function printtables(files)
   println(ret)
 end
 
-function pvaluehelper(alternativell, nullll, n1, n2)
-  delta = Formatting.fmt(".2f", alternativell-nullll)
+function pvaluehelper(alternativell, nullll, n1, n2, csvformat=false)
+  delta = @sprintf("%.2f", alternativell-nullll)
   pval = 1.0 - cdf(Chisq(n1-n2), 2.0*(alternativell-nullll))
   pvalstr = "n.s."
   if pval < 0.05
@@ -398,7 +399,11 @@ function pvaluehelper(alternativell, nullll, n1, n2)
   end
 
   #pvalstr = string(@sprintf("%0.1e", pval), " (",pvalstr,")")
-  return string(delta," & ", pvalstr)
+  if csvformat
+      return string(delta,",", pvalstr)
+  else
+      return string(delta," & ", pvalstr)
+  end
 end
 
 function printaictables2(files)
@@ -416,7 +421,7 @@ function printaictables2(files)
     maxZunpaired, maxunpairedparams = readmaxparams(string(maxfile, ".max.unpaired"))
 
     """
-    delta = Formatting.fmt(".2f", maxZgu-maxZunpaired)
+    delta = @sprintf("%.2f", maxZgu-maxZunpaired)
     pval = 1.0 - cdf(Chisq(3), maxZgu-maxZunpaired)
     pvalstr = "n.s."
     if pval < 0.01
@@ -431,23 +436,23 @@ function printaictables2(files)
     """
 
     #=
-    ret = string(ret, " & 1. Unpaired &  10 & ", Formatting.fmt(".2f", maxZunpaired), " & ",""," &", " - & ", Formatting.fmt(".2f", maxunpairedparams[1]), " & ", Formatting.fmt(".2f", maxunpairedparams[2]), " & ", Formatting.fmt(".2f", maxunpairedparams[3]), "\\\\*\n")
-    ret = string(ret, " & 2. Muse \$\\lambda_{\\text{GC}}=\\lambda_{\\text{AU}}, \\lambda_{\\text{GU}}=1\$ & 12 & ", Formatting.fmt(".2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", Formatting.fmt(".2f", maxZgcauguparams[1]), " & ", Formatting.fmt(".2f", maxZgcauguparams[2]), " & ", Formatting.fmt(".2f", maxZgcauguparams[3]), "\\\\*\n")
-    ret = string(ret, filename, " & 3. Muse \$\\lambda_{\\text{GC}}=\\lambda_{\\text{AU}}\$ &  13 & ", Formatting.fmt(".2f", maxZgcau), " & \$\\Delta_{3,1}\$ = ",pvaluehelper(maxZgcau, maxZunpaired, 13, 10), " & ", Formatting.fmt(".2f", maxZgcauparams[1]), " & ", Formatting.fmt(".2f", maxZgcauparams[2]), " & ", Formatting.fmt(".2f", maxZgcauparams[3]), "\\\\*\n")
+    ret = string(ret, " & 1. Unpaired &  10 & ", @sprintf("%.2f", maxZunpaired), " & ",""," &", " - & ", @sprintf("%.2f", maxunpairedparams[1]), " & ", @sprintf("%.2f", maxunpairedparams[2]), " & ", @sprintf("%.2f", maxunpairedparams[3]), "\\\\*\n")
+    ret = string(ret, " & 2. Muse \$\\lambda_{\\text{GC}}=\\lambda_{\\text{AU}}, \\lambda_{\\text{GU}}=1\$ & 12 & ", @sprintf("%.2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", @sprintf("%.2f", maxZgcauguparams[1]), " & ", @sprintf("%.2f", maxZgcauguparams[2]), " & ", @sprintf("%.2f", maxZgcauguparams[3]), "\\\\*\n")
+    ret = string(ret, filename, " & 3. Muse \$\\lambda_{\\text{GC}}=\\lambda_{\\text{AU}}\$ &  13 & ", @sprintf("%.2f", maxZgcau), " & \$\\Delta_{3,1}\$ = ",pvaluehelper(maxZgcau, maxZunpaired, 13, 10), " & ", @sprintf("%.2f", maxZgcauparams[1]), " & ", @sprintf("%.2f", maxZgcauparams[2]), " & ", @sprintf("%.2f", maxZgcauparams[3]), "\\\\*\n")
     ret = string(ret,  " & & & & \$\\Delta_{3,2}\$ = ",pvaluehelper(maxZgcau, maxZgcaugu, 13, 12), " & ", " & ", " & ","\\\\*\n")
-    ret = string(ret,  " & 4. Muse \$\\lambda_{\\text{GU}}=1\$ & 13 &", Formatting.fmt(".2f", maxZgu), " & \$\\Delta_{4,1}\$ = ",pvaluehelper(maxZgu, maxZunpaired, 13, 10), " & ", Formatting.fmt(".2f", maxZguparams[1]), " & ", Formatting.fmt(".2f", maxZguparams[2]), " & ", Formatting.fmt(".2f", maxZguparams[3]), "\\\\*\n")
+    ret = string(ret,  " & 4. Muse \$\\lambda_{\\text{GU}}=1\$ & 13 &", @sprintf("%.2f", maxZgu), " & \$\\Delta_{4,1}\$ = ",pvaluehelper(maxZgu, maxZunpaired, 13, 10), " & ", @sprintf("%.2f", maxZguparams[1]), " & ", @sprintf("%.2f", maxZguparams[2]), " & ", @sprintf("%.2f", maxZguparams[3]), "\\\\*\n")
     ret = string(ret,  " & & & & \$\\Delta_{4,2}\$ = ",pvaluehelper(maxZgu, maxZgcaugu, 13, 12), " & ", " & ", " & ","\\\\*\n")
     =#
 
 
-    ret = string(ret, " & 1. Unpaired &  10 & ", Formatting.fmt(".2f", maxZunpaired), " & ",""," &", " - & ", Formatting.fmt(".2f", maxunpairedparams[1]), " & ", Formatting.fmt(".2f", maxunpairedparams[2]), " & ", Formatting.fmt(".2f", maxunpairedparams[3]), "\\\\*\n")
-    ret = string(ret, " & 2. Muse \$\\lambda_{\\text{GC}}=\\lambda_{\\text{AU}}, \\lambda_{\\text{GU}}=1\$ & 12 & ", Formatting.fmt(".2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", Formatting.fmt(".2f", maxZgcauguparams[10]), " & ", Formatting.fmt(".2f", maxZgcauguparams[17]), " & ", Formatting.fmt(".2f", maxZgcauguparams[19]), "\\\\*\n")
-    ret = string(ret, filename, " & 3. Muse \$\\lambda_{\\text{GC}}=\\lambda_{\\text{AU}}\$ &  13 & ", Formatting.fmt(".2f", maxZgcau), " & \$\\Delta_{3,1}\$ = ",pvaluehelper(maxZgcau, maxZunpaired, 13, 10), " & ", Formatting.fmt(".2f", maxZgcauparams[10]), " & ", Formatting.fmt(".2f", maxZgcauparams[17]), " & ", Formatting.fmt(".2f", maxZgcauparams[19]), "\\\\*\n")
+    ret = string(ret, " & 1. Unpaired &  10 & ", @sprintf("%.2f", maxZunpaired), " & ",""," &", " - & ", @sprintf("%.2f", maxunpairedparams[1]), " & ", @sprintf("%.2f", maxunpairedparams[2]), " & ", @sprintf("%.2f", maxunpairedparams[3]), "\\\\*\n")
+    ret = string(ret, " & 2. Muse \$\\lambda_{\\text{GC}}=\\lambda_{\\text{AU}}, \\lambda_{\\text{GU}}=1\$ & 12 & ", @sprintf("%.2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", @sprintf("%.2f", maxZgcauguparams[10]), " & ", @sprintf("%.2f", maxZgcauguparams[17]), " & ", @sprintf("%.2f", maxZgcauguparams[19]), "\\\\*\n")
+    ret = string(ret, filename, " & 3. Muse \$\\lambda_{\\text{GC}}=\\lambda_{\\text{AU}}\$ &  13 & ", @sprintf("%.2f", maxZgcau), " & \$\\Delta_{3,1}\$ = ",pvaluehelper(maxZgcau, maxZunpaired, 13, 10), " & ", @sprintf("%.2f", maxZgcauparams[10]), " & ", @sprintf("%.2f", maxZgcauparams[17]), " & ", @sprintf("%.2f", maxZgcauparams[19]), "\\\\*\n")
     ret = string(ret,  " & & & & \$\\Delta_{3,2}\$ = ",pvaluehelper(maxZgcau, maxZgcaugu, 13, 12), " & ", " & ", " & ","\\\\*\n")
-    ret = string(ret,  " & 4. Muse \$\\lambda_{\\text{GU}}=1\$ & 13 &", Formatting.fmt(".2f", maxZgu), " & \$\\Delta_{4,1}\$ = ",pvaluehelper(maxZgu, maxZunpaired, 13, 10), " & ", Formatting.fmt(".2f", maxZguparams[10]), " & ", Formatting.fmt(".2f", maxZguparams[17]), " & ", Formatting.fmt(".2f", maxZguparams[19]), "\\\\*\n")
+    ret = string(ret,  " & 4. Muse \$\\lambda_{\\text{GU}}=1\$ & 13 &", @sprintf("%.2f", maxZgu), " & \$\\Delta_{4,1}\$ = ",pvaluehelper(maxZgu, maxZunpaired, 13, 10), " & ", @sprintf("%.2f", maxZguparams[10]), " & ", @sprintf("%.2f", maxZguparams[17]), " & ", @sprintf("%.2f", maxZguparams[19]), "\\\\*\n")
     ret = string(ret,  " & & & & \$\\Delta_{4,2}\$ = ",pvaluehelper(maxZgu, maxZgcaugu, 13, 12), " & ", " & ", " & ","\\\\*\n")
 
-    delta = Formatting.fmt(".2f", maxZ-maxZgu)
+    delta = @sprintf("%.2f", maxZ-maxZgu)
     pval = 1.0 - cdf(Chisq(1), maxZ-maxZgu)
     pvalstr = "n.s."
     if pval < 0.01
@@ -459,11 +464,11 @@ function printaictables2(files)
     if pval < 0.0001
       pvalstr = "***"
     end
-    #H = Formatting.fmt(".1f", maxZentropy["H"])
-    #H = Formatting.fmt(".1f", maxZentropy["H"])
+    #H = @sprintf("%.1f", maxZentropy["H"])
+    #H = @sprintf("%.1f", maxZentropy["H"])
 
-    #ret = string(ret, " & 5. Muse unconstrained & 14 & ", Formatting.fmt(".2f", maxZ), " & \$\\Delta_{5,2}\$ = ",pvaluehelper(maxZ, maxZgcaugu, 14, 12), " & ", Formatting.fmt(".2f", maxparams[1]), " & ", Formatting.fmt(".2f", maxparams[2]), " & ", Formatting.fmt(".2f", maxparams[3]), "\\tabularnewline\n")
-    ret = string(ret, " & 5. Muse unconstrained & 14 & ", Formatting.fmt(".2f", maxZ), " & \$\\Delta_{5,2}\$ = ",pvaluehelper(maxZ, maxZgcaugu, 14, 12), " & ", Formatting.fmt(".2f", maxparams[10]), " & ", Formatting.fmt(".2f", maxparams[17]), " & ", Formatting.fmt(".2f", maxparams[19]), "\\tabularnewline\n")
+    #ret = string(ret, " & 5. Muse unconstrained & 14 & ", @sprintf("%.2f", maxZ), " & \$\\Delta_{5,2}\$ = ",pvaluehelper(maxZ, maxZgcaugu, 14, 12), " & ", @sprintf("%.2f", maxparams[1]), " & ", @sprintf("%.2f", maxparams[2]), " & ", @sprintf("%.2f", maxparams[3]), "\\tabularnewline\n")
+    ret = string(ret, " & 5. Muse unconstrained & 14 & ", @sprintf("%.2f", maxZ), " & \$\\Delta_{5,2}\$ = ",pvaluehelper(maxZ, maxZgcaugu, 14, 12), " & ", @sprintf("%.2f", maxparams[10]), " & ", @sprintf("%.2f", maxparams[17]), " & ", @sprintf("%.2f", maxparams[19]), "\\tabularnewline\n")
     ret = string(ret,  " & & & & \$\\Delta_{5,3}\$ = ",pvaluehelper(maxZ, maxZgcau, 14, 13), " & ", " & ", " & ","\\\\*\n")
     ret = string(ret,  " & & & & \$\\Delta_{5,4}\$ = ",pvaluehelper(maxZ, maxZgu, 14, 13), " & ", " & ", " & ","\\\\*\n")
 
@@ -490,10 +495,10 @@ function printaictables(files)
     maxZgcau, maxZgcauparams = readmaxparams(string(maxfile, ".fixgcau.max"))
     maxZgcaugu, maxZgcauguparams = readmaxparams(string(maxfile, ".fixgcaugu.max"))
     maxZunpaired, maxunpairedparams = readmaxparams(string(maxfile, ".max.unpaired"))
-    #ret = string(ret, "1. Unpaired &  10 & ", Formatting.fmt(".2f", maxZunpaired), " & ",""," &", " - & ", Formatting.fmt(".2f", maxunpairedparams[1]), " & ", Formatting.fmt(".2f", maxunpairedparams[2]), " & ", Formatting.fmt(".2f", maxunpairedparams[3]), "\\\\*\n")
-    ret = string(ret, "1. Unpaired &  10 & ", Formatting.fmt(".2f", maxZunpaired), " & ",""," &", " - & ", Formatting.fmt(".2f", maxunpairedparams[10]), " & ", Formatting.fmt(".2f", maxunpairedparams[17]), " & ", Formatting.fmt(".2f", maxunpairedparams[19]), "\\\\*\n")
+    #ret = string(ret, "1. Unpaired &  10 & ", @sprintf("%.2f", maxZunpaired), " & ",""," &", " - & ", @sprintf("%.2f", maxunpairedparams[1]), " & ", @sprintf("%.2f", maxunpairedparams[2]), " & ", @sprintf("%.2f", maxunpairedparams[3]), "\\\\*\n")
+    ret = string(ret, "1. Unpaired &  10 & ", @sprintf("%.2f", maxZunpaired), " & ",""," &", " - & ", @sprintf("%.2f", 1.00), " & ", @sprintf("%.2f", 1.00), " & ", @sprintf("%.2f", 1.00), "\\\\*\n")
     """
-    delta = Formatting.fmt(".2f", maxZgu-maxZunpaired)
+    delta = @sprintf("%.2f", maxZgu-maxZunpaired)
     pval = 1.0 - cdf(Chisq(3), maxZgu-maxZunpaired)
     pvalstr = "n.s."
     if pval < 0.01
@@ -506,13 +511,13 @@ function printaictables(files)
       pvalstr = "***"
     end
     """
-    #ret = string(ret, "2. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,} \\lambda_{\\text{AU}}, \\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 12 & ", Formatting.fmt(".2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", Formatting.fmt(".2f", maxZgcauguparams[1]), " & ", Formatting.fmt(".2f", maxZgcauguparams[2]), " & ", Formatting.fmt(".2f", maxZgcauguparams[3]), "\\\\*\n")
-    #ret = string(ret, "3. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,}  \\lambda_{\\text{AU}}\$ &  13 & ", Formatting.fmt(".2f", maxZgcau), " & \$\\Delta_{3,2}\$ = ",pvaluehelper(maxZgcau, maxZgcaugu, 13, 12), " & ", Formatting.fmt(".2f", maxZgcauparams[1]), " & ", Formatting.fmt(".2f", maxZgcauparams[2]), " & ", Formatting.fmt(".2f", maxZgcauparams[3]), "\\\\*\n")
-    #ret = string(ret, "4. \$\\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 13 &", Formatting.fmt(".2f", maxZgu), " & \$\\Delta_{4,2}\$ = ",pvaluehelper(maxZgu, maxZgcaugu, 13, 12), " & ", Formatting.fmt(".2f", maxZguparams[1]), " & ", Formatting.fmt(".2f", maxZguparams[2]), " & ", Formatting.fmt(".2f", maxZguparams[3]), "\\\\*\n")
-    ret = string(ret, "2. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,} \\lambda_{\\text{AU}}, \\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 12 & ", Formatting.fmt(".2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", Formatting.fmt(".2f", maxZgcauguparams[17]), " & ", Formatting.fmt(".2f", maxZgcauguparams[17]), " & ", Formatting.fmt(".2f", maxZgcauguparams[19]), "\\\\*\n")
-    ret = string(ret, "3. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,}  \\lambda_{\\text{AU}}\$ &  13 & ", Formatting.fmt(".2f", maxZgcau), " & \$\\Delta_{3,2}\$ = ",pvaluehelper(maxZgcau, maxZgcaugu, 13, 12), " & ", Formatting.fmt(".2f", maxZgcauparams[17]), " & ", Formatting.fmt(".2f", maxZgcauparams[17]), " & ", Formatting.fmt(".2f", maxZgcauparams[19]), "\\\\*\n")
-    ret = string(ret, "4. \$\\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 13 &", Formatting.fmt(".2f", maxZgu), " & \$\\Delta_{4,2}\$ = ",pvaluehelper(maxZgu, maxZgcaugu, 13, 12), " & ", Formatting.fmt(".2f", maxZguparams[10]), " & ", Formatting.fmt(".2f", maxZguparams[17]), " & ", Formatting.fmt(".2f", maxZguparams[19]), "\\\\*\n")
-    delta = Formatting.fmt(".2f", maxZ-maxZgu)
+    #ret = string(ret, "2. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,} \\lambda_{\\text{AU}}, \\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 12 & ", @sprintf("%.2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", @sprintf("%.2f", maxZgcauguparams[1]), " & ", @sprintf("%.2f", maxZgcauguparams[2]), " & ", @sprintf("%.2f", maxZgcauguparams[3]), "\\\\*\n")
+    #ret = string(ret, "3. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,}  \\lambda_{\\text{AU}}\$ &  13 & ", @sprintf("%.2f", maxZgcau), " & \$\\Delta_{3,2}\$ = ",pvaluehelper(maxZgcau, maxZgcaugu, 13, 12), " & ", @sprintf("%.2f", maxZgcauparams[1]), " & ", @sprintf("%.2f", maxZgcauparams[2]), " & ", @sprintf("%.2f", maxZgcauparams[3]), "\\\\*\n")
+    #ret = string(ret, "4. \$\\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 13 &", @sprintf("%.2f", maxZgu), " & \$\\Delta_{4,2}\$ = ",pvaluehelper(maxZgu, maxZgcaugu, 13, 12), " & ", @sprintf("%.2f", maxZguparams[1]), " & ", @sprintf("%.2f", maxZguparams[2]), " & ", @sprintf("%.2f", maxZguparams[3]), "\\\\*\n")
+    ret = string(ret, "2. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,} \\lambda_{\\text{AU}}, \\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 12 & ", @sprintf("%.2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", @sprintf("%.2f", maxZgcauguparams[17]), " & ", @sprintf("%.2f", maxZgcauguparams[17]), " & ", @sprintf("%.2f", 1.00), "\\\\*\n")
+    ret = string(ret, "3. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,}  \\lambda_{\\text{AU}}\$ &  13 & ", @sprintf("%.2f", maxZgcau), " & \$\\Delta_{3,2}\$ = ",pvaluehelper(maxZgcau, maxZgcaugu, 13, 12), " & ", @sprintf("%.2f", maxZgcauparams[17]), " & ", @sprintf("%.2f", maxZgcauparams[17]), " & ", @sprintf("%.2f", maxZgcauparams[19]), "\\\\*\n")
+    ret = string(ret, "4. \$\\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 13 &", @sprintf("%.2f", maxZgu), " & \$\\Delta_{4,2}\$ = ",pvaluehelper(maxZgu, maxZgcaugu, 13, 12), " & ", @sprintf("%.2f", maxZguparams[10]), " & ", @sprintf("%.2f", maxZguparams[17]), " & ", @sprintf("%.2f", 1.00), "\\\\*\n")
+    delta = @sprintf("%.2f", maxZ-maxZgu)
     pval = 1.0 - cdf(Chisq(1), maxZ-maxZgu)
     pvalstr = "n.s."
     if pval < 0.01
@@ -524,22 +529,47 @@ function printaictables(files)
     if pval < 0.0001
       pvalstr = "***"
     end
-    #H = Formatting.fmt(".1f", maxZentropy["H"])
-    #H = Formatting.fmt(".1f", maxZentropy["H"])
+    #H = @sprintf("%.1f", maxZentropy["H"])
+    #H = @sprintf("%.1f", maxZentropy["H"])
 
 
-    #ret = string(ret, "5. Unconstrained & 14 & ", Formatting.fmt(".2f", maxZ), " & \$\\Delta_{5,3}\$ = ",pvaluehelper(maxZ, maxZgcau, 14, 13), " & ", Formatting.fmt(".2f", maxparams[1]), " & ", Formatting.fmt(".2f", maxparams[2]), " & ", Formatting.fmt(".2f", maxparams[3]), "\\\\*\n")
+    #ret = string(ret, "5. Unconstrained & 14 & ", @sprintf("%.2f", maxZ), " & \$\\Delta_{5,3}\$ = ",pvaluehelper(maxZ, maxZgcau, 14, 13), " & ", @sprintf("%.2f", maxparams[1]), " & ", @sprintf("%.2f", maxparams[2]), " & ", @sprintf("%.2f", maxparams[3]), "\\\\*\n")
     #ret = string(ret,  "& & & \$\\Delta_{5,4}\$ = ",pvaluehelper(maxZ, maxZgu, 14, 13), " & ", " & ", " & ","\\tabularnewline\n")
-    ret = string(ret, "5. Unconstrained & 14 & ", Formatting.fmt(".2f", maxZ), " & \$\\Delta_{5,3}\$ = ",pvaluehelper(maxZ, maxZgcau, 14, 13), " & ", Formatting.fmt(".2f", maxparams[10]), " & ", Formatting.fmt(".2f", maxparams[17]), " & ", Formatting.fmt(".2f", maxparams[19]), "\\\\*\n")
+    ret = string(ret, "5. Unconstrained & 14 & ", @sprintf("%.2f", maxZ), " & \$\\Delta_{5,3}\$ = ",pvaluehelper(maxZ, maxZgcau, 14, 13), " & ", @sprintf("%.2f", maxparams[10]), " & ", @sprintf("%.2f", maxparams[17]), " & ", @sprintf("%.2f", maxparams[19]), "\\\\*\n")
     ret = string(ret,  "& & & \$\\Delta_{5,4}\$ = ",pvaluehelper(maxZ, maxZgu, 14, 13), " & ", " & ", " & ","\\tabularnewline\n")
 
     #\rowcolor{black!20} Unpaired & -15618.34 & - & 10 & - & 1.00 & 1.00 & 1.00 & 1.53 & 2.46 & 1.87 &  1.28 & 3.50 &  1.74\tabularnewline
     #Muse $\lambda_{\text{GU}}=1$ & -15423.56 & 194.78 & 13 & *** & 7.81 & 6.36 & 1.00 & 1.92 & 2.92 & 2.05 & 1.70 & 4.43 & 2.01\tabularnewline
     #\rowcolor{black!20} Muse unconstrained & -15419.26 & 4.30 & 14 & * & 10.63 & 8.88 & 2.16 & 2.01 & 2.85 & 2.13 & 1.73 & 4.28 & 2.09\tabularnewline
     #println(maxZ,"\t",maxparams)
-    ret = string(ret, "\\midrule\n")
+    #ret = string(ret, "\\midrule\n")
   end
   println(ret)
+  return ret
+end
+
+function printaictablescsv(files)
+  ret = ""
+  for maxfile in files
+    println(maxfile)
+    m = match(r"^(.*/)([^/]*)$", maxfile)
+    filename = m[2]
+
+    maxZ, maxparams = readmaxparams(string(maxfile, ".max"))
+    maxZgu, maxZguparams = readmaxparams(string(maxfile, ".fixgu.max"))
+    maxZgcau, maxZgcauparams = readmaxparams(string(maxfile, ".fixgcau.max"))
+    maxZgcaugu, maxZgcauguparams = readmaxparams(string(maxfile, ".fixgcaugu.max"))
+    maxZunpaired, maxunpairedparams = readmaxparams(string(maxfile, ".max.unpaired"))
+    ret = "Model,Params,Maximum Log Likelihood,Delta,p-value,lambdaGC,lambdaAU,lambdaGU\n"
+    ret = string(ret, "\"1. Unpaired\", 10,", @sprintf("%.2f", maxZunpaired), ",","",",", "-,", @sprintf("%.2f", 1.00), ",", @sprintf("%.2f", 1.00), ",", @sprintf("%.2f", 1.00), "\n")
+    ret = string(ret, "\"2. lambdaGC := lambdaAU, lambdaGU := 1\",12,", @sprintf("%.2f", maxZgcaugu), ",M2-M1 = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10, true), ",", @sprintf("%.2f", maxZgcauguparams[17]), ",", @sprintf("%.2f", maxZgcauguparams[17]), ",", @sprintf("%.2f", 1.00), "\n")
+    ret = string(ret, "\"3. lambdaGC := lambdaAU\",13,", @sprintf("%.2f", maxZgcau), ",M3-M2 = ",pvaluehelper(maxZgcau, maxZgcaugu, 13, 12, true), ",", @sprintf("%.2f", maxZgcauparams[17]), ",", @sprintf("%.2f", maxZgcauparams[17]), ",", @sprintf("%.2f", maxZgcauparams[19]), "\n")
+    ret = string(ret, "\"4. lambdaGU := 1\",13,", @sprintf("%.2f", maxZgu), ",M4-M2 = ",pvaluehelper(maxZgu, maxZgcaugu, 13, 12, true), ",", @sprintf("%.2f", maxZguparams[10]), ",", @sprintf("%.2f", maxZguparams[17]), ",", @sprintf("%.2f", 1.00), "\n")
+    ret = string(ret, "\"5. Unconstrained\",14,", @sprintf("%.2f", maxZ), ",M5-M3 = ",pvaluehelper(maxZ, maxZgcau, 14, 13, true), ",", @sprintf("%.2f", maxparams[10]), ",", @sprintf("%.2f", maxparams[17]), ",", @sprintf("%.2f", maxparams[19]), "\n")
+    ret = string(ret,  ",,,M5-M4 = ",pvaluehelper(maxZ, maxZgu, 14, 13, true), ",", ",", ",","\n")
+    ret = string(ret, "\"*p < 0.05; **p < 0.005; ***p < 0.0005; n.s. = not significant\"\n")
+  end
+  return ret
 end
 
 function printlargeaictable(files)
@@ -556,29 +586,13 @@ function printlargeaictable(files)
     maxZgcau, maxZgcauparams = readmaxparams(string(maxfile, ".fixgcau.max"))
     maxZgcaugu, maxZgcauguparams = readmaxparams(string(maxfile, ".fixgcaugu.max"))
     maxZunpaired, maxunpairedparams = readmaxparams(string(maxfile, ".max.unpaired"))
-    #ret = string(ret, "1. Unpaired &  10 & ", Formatting.fmt(".2f", maxZunpaired), " & ",""," &", " - & ", Formatting.fmt(".2f", maxunpairedparams[1]), " & ", Formatting.fmt(".2f", maxunpairedparams[2]), " & ", Formatting.fmt(".2f", maxunpairedparams[3]), "\\\\*\n")
-    ret = string(ret, "1. Unpaired &  10 & ", Formatting.fmt(".2f", maxZunpaired), " & ",""," &", " - & ", Formatting.fmt(".2f", maxunpairedparams[10]), " & ", Formatting.fmt(".2f", maxunpairedparams[17]), " & ", Formatting.fmt(".2f", maxunpairedparams[19]), "\\\\*\n")
-    """
-    delta = Formatting.fmt(".2f", maxZgu-maxZunpaired)
-    pval = 1.0 - cdf(Chisq(3), maxZgu-maxZunpaired)
-    pvalstr = "n.s."
-    if pval < 0.01
-      pvalstr = "*"
-    end
-    if  pval < 0.001
-      pvalstr = "**"
-    end
-    if pval < 0.0001
-      pvalstr = "***"
-    end
-    """
-    #ret = string(ret, "2. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,} \\lambda_{\\text{AU}}, \\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 12 & ", Formatting.fmt(".2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", Formatting.fmt(".2f", maxZgcauguparams[1]), " & ", Formatting.fmt(".2f", maxZgcauguparams[2]), " & ", Formatting.fmt(".2f", maxZgcauguparams[3]), "\\\\*\n")
-    #ret = string(ret, "3. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,}  \\lambda_{\\text{AU}}\$ &  13 & ", Formatting.fmt(".2f", maxZgcau), " & \$\\Delta_{3,2}\$ = ",pvaluehelper(maxZgcau, maxZgcaugu, 13, 12), " & ", Formatting.fmt(".2f", maxZgcauparams[1]), " & ", Formatting.fmt(".2f", maxZgcauparams[2]), " & ", Formatting.fmt(".2f", maxZgcauparams[3]), "\\\\*\n")
-    #ret = string(ret, "4. \$\\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 13 &", Formatting.fmt(".2f", maxZgu), " & \$\\Delta_{4,2}\$ = ",pvaluehelper(maxZgu, maxZgcaugu, 13, 12), " & ", Formatting.fmt(".2f", maxZguparams[1]), " & ", Formatting.fmt(".2f", maxZguparams[2]), " & ", Formatting.fmt(".2f", maxZguparams[3]), "\\\\*\n")
-    ret = string(ret, "2. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,} \\lambda_{\\text{AU}}, \\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 12 & ", Formatting.fmt(".2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", Formatting.fmt(".2f", maxZgcauguparams[17]), " & ", Formatting.fmt(".2f", maxZgcauguparams[17]), " & ", Formatting.fmt(".2f", maxZgcauguparams[19]), "\\\\*\n")
-    ret = string(ret, "3. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,}  \\lambda_{\\text{AU}}\$ &  13 & ", Formatting.fmt(".2f", maxZgcau), " & \$\\Delta_{3,2}\$ = ",pvaluehelper(maxZgcau, maxZgcaugu, 13, 12), " & ", Formatting.fmt(".2f", maxZgcauparams[17]), " & ", Formatting.fmt(".2f", maxZgcauparams[17]), " & ", Formatting.fmt(".2f", maxZgcauparams[19]), "\\\\*\n")
-    ret = string(ret, "4. \$\\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 13 &", Formatting.fmt(".2f", maxZgu), " & \$\\Delta_{4,2}\$ = ",pvaluehelper(maxZgu, maxZgcaugu, 13, 12), " & ", Formatting.fmt(".2f", maxZguparams[10]), " & ", Formatting.fmt(".2f", maxZguparams[17]), " & ", Formatting.fmt(".2f", maxZguparams[19]), "\\\\*\n")
-    delta = Formatting.fmt(".2f", maxZ-maxZgu)
+    #ret = string(ret, "1. Unpaired &  10 & ", @sprintf("%.2f", maxZunpaired), " & ",""," &", " - & ", @sprintf("%.2f", maxunpairedparams[1]), " & ", @sprintf("%.2f", maxunpairedparams[2]), " & ", @sprintf("%.2f", maxunpairedparams[3]), "\\\\*\n")
+    ret = string(ret, "1. Unpaired &  10 & ", @sprintf("%.2f", maxZunpaired), " & ",""," &", " - & ", @sprintf("%.2f", maxunpairedparams[10]), " & ", @sprintf("%.2f", maxunpairedparams[17]), " & ", @sprintf("%.2f", maxunpairedparams[19]), "\\\\*\n")
+
+    ret = string(ret, "2. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,} \\lambda_{\\text{AU}}, \\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 12 & ", @sprintf("%.2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", @sprintf("%.2f", maxZgcauguparams[17]), " & ", @sprintf("%.2f", maxZgcauguparams[17]), " & ", @sprintf("%.2f", maxZgcauguparams[19]), "\\\\*\n")
+    ret = string(ret, "3. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,}  \\lambda_{\\text{AU}}\$ &  13 & ", @sprintf("%.2f", maxZgcau), " & \$\\Delta_{3,2}\$ = ",pvaluehelper(maxZgcau, maxZgcaugu, 13, 12), " & ", @sprintf("%.2f", maxZgcauparams[17]), " & ", @sprintf("%.2f", maxZgcauparams[17]), " & ", @sprintf("%.2f", maxZgcauparams[19]), "\\\\*\n")
+    ret = string(ret, "4. \$\\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 13 &", @sprintf("%.2f", maxZgu), " & \$\\Delta_{4,2}\$ = ",pvaluehelper(maxZgu, maxZgcaugu, 13, 12), " & ", @sprintf("%.2f", maxZguparams[10]), " & ", @sprintf("%.2f", maxZguparams[17]), " & ", @sprintf("%.2f", maxZguparams[19]), "\\\\*\n")
+    delta = @sprintf("%.2f", maxZ-maxZgu)
     pval = 1.0 - cdf(Chisq(1), maxZ-maxZgu)
     pvalstr = "n.s."
     if pval < 0.01
@@ -590,19 +604,10 @@ function printlargeaictable(files)
     if pval < 0.0001
       pvalstr = "***"
     end
-    #H = Formatting.fmt(".1f", maxZentropy["H"])
-    #H = Formatting.fmt(".1f", maxZentropy["H"])
 
-
-    #ret = string(ret, "5. Unconstrained & 14 & ", Formatting.fmt(".2f", maxZ), " & \$\\Delta_{5,3}\$ = ",pvaluehelper(maxZ, maxZgcau, 14, 13), " & ", Formatting.fmt(".2f", maxparams[1]), " & ", Formatting.fmt(".2f", maxparams[2]), " & ", Formatting.fmt(".2f", maxparams[3]), "\\\\*\n")
-    #ret = string(ret,  "& & & \$\\Delta_{5,4}\$ = ",pvaluehelper(maxZ, maxZgu, 14, 13), " & ", " & ", " & ","\\tabularnewline\n")
-    ret = string(ret, "5. Unconstrained & 14 & ", Formatting.fmt(".2f", maxZ), " & \$\\Delta_{5,3}\$ = ",pvaluehelper(maxZ, maxZgcau, 14, 13), " & ", Formatting.fmt(".2f", maxparams[10]), " & ", Formatting.fmt(".2f", maxparams[17]), " & ", Formatting.fmt(".2f", maxparams[19]), "\\\\*\n")
+    ret = string(ret, "5. Unconstrained & 14 & ", @sprintf("%.2f", maxZ), " & \$\\Delta_{5,3}\$ = ",pvaluehelper(maxZ, maxZgcau, 14, 13), " & ", @sprintf("%.2f", maxparams[10]), " & ", @sprintf("%.2f", maxparams[17]), " & ", @sprintf("%.2f", maxparams[19]), "\\\\*\n")
     ret = string(ret,  "& & & \$\\Delta_{5,4}\$ = ",pvaluehelper(maxZ, maxZgu, 14, 13), " & ", " & ", " & ","\\tabularnewline\n")
 
-    #\rowcolor{black!20} Unpaired & -15618.34 & - & 10 & - & 1.00 & 1.00 & 1.00 & 1.53 & 2.46 & 1.87 &  1.28 & 3.50 &  1.74\tabularnewline
-    #Muse $\lambda_{\text{GU}}=1$ & -15423.56 & 194.78 & 13 & *** & 7.81 & 6.36 & 1.00 & 1.92 & 2.92 & 2.05 & 1.70 & 4.43 & 2.01\tabularnewline
-    #\rowcolor{black!20} Muse unconstrained & -15419.26 & 4.30 & 14 & * & 10.63 & 8.88 & 2.16 & 2.01 & 2.85 & 2.13 & 1.73 & 4.28 & 2.09\tabularnewline
-    #println(maxZ,"\t",maxparams)
     ret = string(ret, "\\midrule\n")
   end
   println(ret)
@@ -622,10 +627,10 @@ function printaictables3(files)
     maxZgcau, maxZgcauparams = readmaxparams(string(maxfile, ".fixgcau.max"))
     maxZgcaugu, maxZgcauguparams = readmaxparams(string(maxfile, ".fixgcaugu.max"))
     maxZunpaired, maxunpairedparams = readmaxparams(string(maxfile, ".max.unpaired"))
-    #ret = string(ret, "1. Unpaired &  10 & ", Formatting.fmt(".2f", maxZunpaired), " & ",""," &", " - & ", Formatting.fmt(".2f", maxunpairedparams[1]), " & ", Formatting.fmt(".2f", maxunpairedparams[2]), " & ", Formatting.fmt(".2f", maxunpairedparams[3]), "\\\\*\n")
-    ret = string(ret, "1. Unpaired &  10 & ", Formatting.fmt(".2f", maxZunpaired), " & ",""," &", " - & ", Formatting.fmt(".2f", maxunpairedparams[10]), " & ", Formatting.fmt(".2f", maxunpairedparams[17]), " & ", Formatting.fmt(".2f", maxunpairedparams[19]), "\\\\*\n")
+    #ret = string(ret, "1. Unpaired &  10 & ", @sprintf("%.2f", maxZunpaired), " & ",""," &", " - & ", @sprintf("%.2f", maxunpairedparams[1]), " & ", @sprintf("%.2f", maxunpairedparams[2]), " & ", @sprintf("%.2f", maxunpairedparams[3]), "\\\\*\n")
+    ret = string(ret, "1. Unpaired &  10 & ", @sprintf("%.2f", maxZunpaired), " & ",""," &", " - & ", @sprintf("%.2f", maxunpairedparams[10]), " & ", @sprintf("%.2f", maxunpairedparams[17]), " & ", @sprintf("%.2f", maxunpairedparams[19]), "\\\\*\n")
     """
-    delta = Formatting.fmt(".2f", maxZgu-maxZunpaired)
+    delta = @sprintf("%.2f", maxZgu-maxZunpaired)
     pval = 1.0 - cdf(Chisq(3), maxZgu-maxZunpaired)
     pvalstr = "n.s."
     if pval < 0.01
@@ -638,13 +643,13 @@ function printaictables3(files)
       pvalstr = "***"
     end
     """
-    #ret = string(ret, "2. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,} \\lambda_{\\text{AU}}, \\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 12 & ", Formatting.fmt(".2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", Formatting.fmt(".2f", maxZgcauguparams[1]), " & ", Formatting.fmt(".2f", maxZgcauguparams[2]), " & ", Formatting.fmt(".2f", maxZgcauguparams[3]), "\\\\*\n")
-    #ret = string(ret, "3. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,}  \\lambda_{\\text{AU}}\$ &  13 & ", Formatting.fmt(".2f", maxZgcau), " & \$\\Delta_{3,2}\$ = ",pvaluehelper(maxZgcau, maxZgcaugu, 13, 12), " & ", Formatting.fmt(".2f", maxZgcauparams[1]), " & ", Formatting.fmt(".2f", maxZgcauparams[2]), " & ", Formatting.fmt(".2f", maxZgcauparams[3]), "\\\\*\n")
-    #ret = string(ret, "4. \$\\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 13 &", Formatting.fmt(".2f", maxZgu), " & \$\\Delta_{4,2}\$ = ",pvaluehelper(maxZgu, maxZgcaugu, 13, 12), " & ", Formatting.fmt(".2f", maxZguparams[1]), " & ", Formatting.fmt(".2f", maxZguparams[2]), " & ", Formatting.fmt(".2f", maxZguparams[3]), "\\\\*\n")
-    ret = string(ret, "2. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,} \\lambda_{\\text{AU}}, \\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 12 & ", Formatting.fmt(".2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", Formatting.fmt(".2f", maxZgcauguparams[17]), " & ", Formatting.fmt(".2f", maxZgcauguparams[17]), " & ", Formatting.fmt(".2f", maxZgcauguparams[19]), "\\\\*\n")
-    ret = string(ret, "3. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,}  \\lambda_{\\text{AU}}\$ &  13 & ", Formatting.fmt(".2f", maxZgcau), " & \$\\Delta_{3,2}\$ = ",pvaluehelper(maxZgcau, maxZgcaugu, 13, 12), " & ", Formatting.fmt(".2f", maxZgcauparams[17]), " & ", Formatting.fmt(".2f", maxZgcauparams[17]), " & ", Formatting.fmt(".2f", maxZgcauparams[19]), "\\\\*\n")
-    ret = string(ret, "4. \$\\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 13 &", Formatting.fmt(".2f", maxZgu), " & \$\\Delta_{4,2}\$ = ",pvaluehelper(maxZgu, maxZgcaugu, 13, 12), " & ", Formatting.fmt(".2f", maxZguparams[10]), " & ", Formatting.fmt(".2f", maxZguparams[17]), " & ", Formatting.fmt(".2f", maxZguparams[19]), "\\\\*\n")
-    delta = Formatting.fmt(".2f", maxZ-maxZgu)
+    #ret = string(ret, "2. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,} \\lambda_{\\text{AU}}, \\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 12 & ", @sprintf("%.2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", @sprintf("%.2f", maxZgcauguparams[1]), " & ", @sprintf("%.2f", maxZgcauguparams[2]), " & ", @sprintf("%.2f", maxZgcauguparams[3]), "\\\\*\n")
+    #ret = string(ret, "3. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,}  \\lambda_{\\text{AU}}\$ &  13 & ", @sprintf("%.2f", maxZgcau), " & \$\\Delta_{3,2}\$ = ",pvaluehelper(maxZgcau, maxZgcaugu, 13, 12), " & ", @sprintf("%.2f", maxZgcauparams[1]), " & ", @sprintf("%.2f", maxZgcauparams[2]), " & ", @sprintf("%.2f", maxZgcauparams[3]), "\\\\*\n")
+    #ret = string(ret, "4. \$\\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 13 &", @sprintf("%.2f", maxZgu), " & \$\\Delta_{4,2}\$ = ",pvaluehelper(maxZgu, maxZgcaugu, 13, 12), " & ", @sprintf("%.2f", maxZguparams[1]), " & ", @sprintf("%.2f", maxZguparams[2]), " & ", @sprintf("%.2f", maxZguparams[3]), "\\\\*\n")
+    ret = string(ret, "2. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,} \\lambda_{\\text{AU}}, \\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 12 & ", @sprintf("%.2f", maxZgcaugu), " & \$\\Delta_{2,1}\$ = ", pvaluehelper(maxZgcaugu, maxZunpaired, 12, 10), " & ", @sprintf("%.2f", maxZgcauguparams[17]), " & ", @sprintf("%.2f", maxZgcauguparams[17]), " & ", @sprintf("%.2f", maxZgcauguparams[19]), "\\\\*\n")
+    ret = string(ret, "3. \$\\lambda_{\\text{GC}} {\\,\\coloneqq\\,}  \\lambda_{\\text{AU}}\$ &  13 & ", @sprintf("%.2f", maxZgcau), " & \$\\Delta_{3,2}\$ = ",pvaluehelper(maxZgcau, maxZgcaugu, 13, 12), " & ", @sprintf("%.2f", maxZgcauparams[17]), " & ", @sprintf("%.2f", maxZgcauparams[17]), " & ", @sprintf("%.2f", maxZgcauparams[19]), "\\\\*\n")
+    ret = string(ret, "4. \$\\lambda_{\\text{GU}} {\\,\\coloneqq\\,}  1\$ & 13 &", @sprintf("%.2f", maxZgu), " & \$\\Delta_{4,2}\$ = ",pvaluehelper(maxZgu, maxZgcaugu, 13, 12), " & ", @sprintf("%.2f", maxZguparams[10]), " & ", @sprintf("%.2f", maxZguparams[17]), " & ", @sprintf("%.2f", maxZguparams[19]), "\\\\*\n")
+    delta = @sprintf("%.2f", maxZ-maxZgu)
     pval = 1.0 - cdf(Chisq(1), maxZ-maxZgu)
     pvalstr = "n.s."
     if pval < 0.01
@@ -656,13 +661,13 @@ function printaictables3(files)
     if pval < 0.0001
       pvalstr = "***"
     end
-    #H = Formatting.fmt(".1f", maxZentropy["H"])
-    #H = Formatting.fmt(".1f", maxZentropy["H"])
+    #H = @sprintf("%.1f", maxZentropy["H"])
+    #H = @sprintf("%.1f", maxZentropy["H"])
 
 
-    #ret = string(ret, "5. Unconstrained & 14 & ", Formatting.fmt(".2f", maxZ), " & \$\\Delta_{5,3}\$ = ",pvaluehelper(maxZ, maxZgcau, 14, 13), " & ", Formatting.fmt(".2f", maxparams[1]), " & ", Formatting.fmt(".2f", maxparams[2]), " & ", Formatting.fmt(".2f", maxparams[3]), "\\\\*\n")
+    #ret = string(ret, "5. Unconstrained & 14 & ", @sprintf("%.2f", maxZ), " & \$\\Delta_{5,3}\$ = ",pvaluehelper(maxZ, maxZgcau, 14, 13), " & ", @sprintf("%.2f", maxparams[1]), " & ", @sprintf("%.2f", maxparams[2]), " & ", @sprintf("%.2f", maxparams[3]), "\\\\*\n")
     #ret = string(ret,  "& & & \$\\Delta_{5,4}\$ = ",pvaluehelper(maxZ, maxZgu, 14, 13), " & ", " & ", " & ","\\tabularnewline\n")
-    ret = string(ret, "5. Unconstrained & 14 & ", Formatting.fmt(".2f", maxZ), " & \$\\Delta_{5,3}\$ = ",pvaluehelper(maxZ, maxZgcau, 14, 13), " & ", Formatting.fmt(".2f", maxparams[10]), " & ", Formatting.fmt(".2f", maxparams[17]), " & ", Formatting.fmt(".2f", maxparams[19]), "\\\\*\n")
+    ret = string(ret, "5. Unconstrained & 14 & ", @sprintf("%.2f", maxZ), " & \$\\Delta_{5,3}\$ = ",pvaluehelper(maxZ, maxZgcau, 14, 13), " & ", @sprintf("%.2f", maxparams[10]), " & ", @sprintf("%.2f", maxparams[17]), " & ", @sprintf("%.2f", maxparams[19]), "\\\\*\n")
     ret = string(ret,  "& & & \$\\Delta_{5,4}\$ = ",pvaluehelper(maxZ, maxZgu, 14, 13), " & ", " & ", " & ","\\tabularnewline\n")
 
     #\rowcolor{black!20} Unpaired & -15618.34 & - & 10 & - & 1.00 & 1.00 & 1.00 & 1.53 & 2.46 & 1.87 &  1.28 & 3.50 &  1.74\tabularnewline
@@ -701,7 +706,7 @@ function printcomputationtables(files)
     if iter % 2 == 1
       ret = string(ret, "\\rowcolor{black!20} ")
     end
-    ret = string(ret,m[2], " & ", spl2[1], " & ", spl2[2], " & ", format(without, commas=true), " & ", format(with, commas=true), " & ", Formatting.fmt(".1f", without/with), "\\tabularnewline\n")
+    ret = string(ret,m[2], " & ", spl2[1], " & ", spl2[2], " & ", format(without, commas=true), " & ", format(with, commas=true), " & ", @sprintf("%.1f", without/with), "\\tabularnewline\n")
     iter += 1
   end
   println(ret)
@@ -737,7 +742,7 @@ function printcomputationtablessorted(files)
     if iter % 2 == 1
       ret = string(ret, "\\rowcolor{black!20} ")
     end=#
-    ret = string(ret,m[2], " & ", spl2[1], " & ", spl2[2], " & ", format(without, commas=true), " & ", format(with, commas=true), " & ", Formatting.fmt(".1f", without/with), "\\tabularnewline\n")
+    ret = string(ret,m[2], " & ", spl2[1], " & ", spl2[2], " & ", format(without, commas=true), " & ", format(with, commas=true), " & ", @sprintf("%.1f", without/with), "\\tabularnewline\n")
     push!(lines, (-without, ret))
     iter += 1
   end
@@ -782,26 +787,26 @@ function printentropytable(files)
     if iter % 2 == 1
       ret = string(ret, "\\rowcolor{black!20} ")
     end
-    #ret = string(ret, filename, " & ",  Formatting.fmt(".1f", maxZ), " & ", entropydict["length"], " & ", Formatting.fmt(".1f", entropydict["H"]), " & ", Formatting.fmt(".1f", entropydict["Hmax"]), " & ", Formatting.fmt(".1f", entropypriordict["H"]), " & ", Formatting.fmt(".3f", entropydict["percentage"]), " & ",  Formatting.fmt(".1f", maxZ_s1), " & ", Formatting.fmt(".1f", entropydict_s1["H"]), " & ", Formatting.fmt(".3f", entropydict_s1["percentage"]), " & ", Formatting.fmt(".1f", maxZ_s2), " & ", Formatting.fmt(".1f", entropydict_s2["H"]), " & ", Formatting.fmt(".3f", entropydict_s2["percentage"]), "\\tabularnewline\n")
-    #ret = string(ret, filename, " & ",  Formatting.fmt(".1f", maxZ), " & ", entropydict["length"], " & ", Formatting.fmt(".1f", entropydict["H"]), " & ", Formatting.fmt(".1f", entropydict["Hmax"]), " & ", Formatting.fmt(".1f", entropypriordict["H"]), " & ", Formatting.fmt(".3f", entropydict["percentage"]), " & ",  Formatting.fmt(".1f", maxZ_s1-maxZ), " & ", Formatting.fmt(".1f", entropydict_s1["H"]-entropydict["H"]), " & ", Formatting.fmt(".3f", entropydict_s1["percentage"]), " & ", Formatting.fmt(".1f", maxZ_s2-maxZ), " & ", Formatting.fmt(".1f", entropydict_s2["H"]-entropydict["H"]), " & ", Formatting.fmt(".3f", entropydict_s2["percentage"]), "\\tabularnewline\n")
-    #ret = string(ret, filename, " & ",  Formatting.fmt(".1f", maxZ), " & ", entropydict["length"], " & ", Formatting.fmt(".1f", entropydict["H"]), " & ", Formatting.fmt(".1f", entropydict["Hmax"]), " & ", Formatting.fmt(".3f", entropydict["percentage"]), " & ",  Formatting.fmt(".1f", maxZ_s1-maxZ), " & ", Formatting.fmt(".1f", entropydict_s1["H"]-entropydict["H"]), " & ", Formatting.fmt(".1f", (entropydict_s1["H"]-entropydict["H"])*100.0/entropydict["Hmax"]), "\\%", " & ", Formatting.fmt(".1f", maxZ_s2-maxZ), " & ", Formatting.fmt(".1f", entropydict_s2["H"]-entropydict["H"]), " & ", Formatting.fmt(".1f", (entropydict_s2["H"]-entropydict["H"])*100.0/entropydict["Hmax"]),  "\\%", "\\tabularnewline\n")
+    #ret = string(ret, filename, " & ",  @sprintf("%.1f", maxZ), " & ", entropydict["length"], " & ", @sprintf("%.1f", entropydict["H"]), " & ", @sprintf("%.1f", entropydict["Hmax"]), " & ", @sprintf("%.1f", entropypriordict["H"]), " & ", @sprintf("%.3f", entropydict["percentage"]), " & ",  @sprintf("%.1f", maxZ_s1), " & ", @sprintf("%.1f", entropydict_s1["H"]), " & ", @sprintf("%.3f", entropydict_s1["percentage"]), " & ", @sprintf("%.1f", maxZ_s2), " & ", @sprintf("%.1f", entropydict_s2["H"]), " & ", @sprintf("%.3f", entropydict_s2["percentage"]), "\\tabularnewline\n")
+    #ret = string(ret, filename, " & ",  @sprintf("%.1f", maxZ), " & ", entropydict["length"], " & ", @sprintf("%.1f", entropydict["H"]), " & ", @sprintf("%.1f", entropydict["Hmax"]), " & ", @sprintf("%.1f", entropypriordict["H"]), " & ", @sprintf("%.3f", entropydict["percentage"]), " & ",  @sprintf("%.1f", maxZ_s1-maxZ), " & ", @sprintf("%.1f", entropydict_s1["H"]-entropydict["H"]), " & ", @sprintf("%.3f", entropydict_s1["percentage"]), " & ", @sprintf("%.1f", maxZ_s2-maxZ), " & ", @sprintf("%.1f", entropydict_s2["H"]-entropydict["H"]), " & ", @sprintf("%.3f", entropydict_s2["percentage"]), "\\tabularnewline\n")
+    #ret = string(ret, filename, " & ",  @sprintf("%.1f", maxZ), " & ", entropydict["length"], " & ", @sprintf("%.1f", entropydict["H"]), " & ", @sprintf("%.1f", entropydict["Hmax"]), " & ", @sprintf("%.3f", entropydict["percentage"]), " & ",  @sprintf("%.1f", maxZ_s1-maxZ), " & ", @sprintf("%.1f", entropydict_s1["H"]-entropydict["H"]), " & ", @sprintf("%.1f", (entropydict_s1["H"]-entropydict["H"])*100.0/entropydict["Hmax"]), "\\%", " & ", @sprintf("%.1f", maxZ_s2-maxZ), " & ", @sprintf("%.1f", entropydict_s2["H"]-entropydict["H"]), " & ", @sprintf("%.1f", (entropydict_s2["H"]-entropydict["H"])*100.0/entropydict["Hmax"]),  "\\%", "\\tabularnewline\n")
 
-    deltaH1 = Formatting.fmt(".1f", entropydict_s1["H"]-entropydict["H"])
-    deltaH1perc = Formatting.fmt(".3f", (entropydict_s1["H"]-entropydict["H"])/entropydict["Hmax"])
+    deltaH1 = @sprintf("%.1f", entropydict_s1["H"]-entropydict["H"])
+    deltaH1perc = @sprintf("%.3f", (entropydict_s1["H"]-entropydict["H"])/entropydict["Hmax"])
     if entropydict_s1["H"]-entropydict["H"] >= 0.0
-      deltaH1 = string("+", Formatting.fmt(".1f", entropydict_s1["H"]-entropydict["H"]))
-      deltaH1perc = string("+", Formatting.fmt(".3f", (entropydict_s1["H"]-entropydict["H"])/entropydict["Hmax"]))
+      deltaH1 = string("+", @sprintf("%.1f", entropydict_s1["H"]-entropydict["H"]))
+      deltaH1perc = string("+", @sprintf("%.3f", (entropydict_s1["H"]-entropydict["H"])/entropydict["Hmax"]))
     end
 
-    deltaH2 = Formatting.fmt(".1f", entropydict_s2["H"]-entropydict["H"])
-    deltaH2perc = Formatting.fmt(".3f", (entropydict_s2["H"]-entropydict["H"])/entropydict["Hmax"])
+    deltaH2 = @sprintf("%.1f", entropydict_s2["H"]-entropydict["H"])
+    deltaH2perc = @sprintf("%.3f", (entropydict_s2["H"]-entropydict["H"])/entropydict["Hmax"])
     if entropydict_s2["H"]-entropydict["H"] >= 0.0
-      deltaH2 = string("+", Formatting.fmt(".1f", entropydict_s2["H"]-entropydict["H"]))
-      deltaH2perc = string("+", Formatting.fmt(".3f", (entropydict_s2["H"]-entropydict["H"])/entropydict["Hmax"]))
+      deltaH2 = string("+", @sprintf("%.1f", entropydict_s2["H"]-entropydict["H"]))
+      deltaH2perc = string("+", @sprintf("%.3f", (entropydict_s2["H"]-entropydict["H"])/entropydict["Hmax"]))
     end
 
 
-    ret = string(ret, filename, " & ",  Formatting.fmt(".1f", maxZ), " & ", Formatting.fmt(".1f", maxZunpaired-maxZ), " & ", entropydict["length"], " & ", Formatting.fmt(".1f", entropydict["H"]), " & ", Formatting.fmt(".1f", entropydict["Hmax"]), " & ", Formatting.fmt(".3f", entropydict["percentage"]), " & ",  Formatting.fmt(".1f", maxZ_s1-maxZ), " & ", deltaH1, " & ", deltaH1perc, "", " & ", Formatting.fmt(".1f", maxZ_s2-maxZ), " & ", deltaH2, " & ", deltaH2perc,  "", "\\tabularnewline\n")
+    ret = string(ret, filename, " & ",  @sprintf("%.1f", maxZ), " & ", @sprintf("%.1f", maxZunpaired-maxZ), " & ", entropydict["length"], " & ", @sprintf("%.1f", entropydict["H"]), " & ", @sprintf("%.1f", entropydict["Hmax"]), " & ", @sprintf("%.3f", entropydict["percentage"]), " & ",  @sprintf("%.1f", maxZ_s1-maxZ), " & ", deltaH1, " & ", deltaH1perc, "", " & ", @sprintf("%.1f", maxZ_s2-maxZ), " & ", deltaH2, " & ", deltaH2perc,  "", "\\tabularnewline\n")
     iter += 1
   end
   println(ret)
@@ -875,7 +880,7 @@ function getcovmatfromfile(mcmclogfile)
   return keys,params,A=#
   return cov(mat)
 end
-using FastaIO
+
 function saveungappedlength(outputprefix)
   fastafile = string(outputprefix,".fas.norm")
   nucmapping = Dict('A' => 1, 'C' => 2, 'G' => 3, 'T' => 4, 'U' => 4)
@@ -955,64 +960,65 @@ function lambdaordering(outputprefix)
     return counts/sum(counts), median(GCvec), median(AUvec), median(GUvec)
 end
 
+function main()
+    #files = ["/media/michael/Sandisk500GB/data/msv/msv","/media/michael/Sandisk500GB/data/tylcv/tylcv","/media/michael/Sandisk500GB/data4/fmdv2/fmdv","/media/michael/Sandisk500GB/data4/hpv1/hpv1","/media/michael/Sandisk500GB/data4/tobamovirus/tobamovirus","/media/michael/Sandisk500GB/data4/rhinovirus_a/rhinovirus_a","/media/michael/Sandisk500GB/data4/hepa/hepa","/media/michael/Sandisk500GB/data/RNaseMRP_mcmc/RNaseMRP", "/media/michael/Sandisk500GB/data/ires_mcmc6/ires", "/media/michael/Sandisk500GB/data/RF00001/RF00001","/media/michael/Sandisk500GB/data/RF00002/RF00002","/media/michael/Sandisk500GB/data/RF00003/RF00003", "/media/michael/Sandisk500GB/data/RF00004/RF00004", "/media/michael/Sandisk500GB/data/RF00010/RF00010", "/media/michael/Sandisk500GB/data/RF00011/RF00011", "/media/michael/Sandisk500GB/data/RF00012/RF00012", "/media/michael/Sandisk500GB/data/RF00020/RF00020", "/media/michael/Sandisk500GB/data/RF00026/RF00026", "/media/michael/Sandisk500GB/data/RF00100/RF00100", "/media/michael/Sandisk500GB/data/RF00174/RF00174", "/media/michael/Sandisk500GB/data/RF00379/RF00379", "/media/michael/Sandisk500GB/data/RF00380/RF00380", "/media/michael/Sandisk500GB/data/RF01846/RF01846", "/media/michael/Sandisk500GB/data/RF01854/RF01854", "/media/michael/Sandisk500GB/data/RF02001/RF02001", "/media/michael/Sandisk500GB/data/RF02540/RF02540", "/media/michael/Sandisk500GB/data/RF02541/RF02541", "/media/michael/Sandisk500GB/data/RF02542/RF02542", "/media/michael/Sandisk500GB/data/RF02543/RF02543"  , "/media/michael/Sandisk500GB/data/beet_curly_mcmc/bctv", "/media/michael/Sandisk500GB/data/wdf_mcmc/wdf","/media/michael/Sandisk500GB/data/bocavirus_mcmc/bocavirus"]
+    #printcomputationtables(files)
+    #printcomputationtablessorted(files)
+    #exit()
 
-#files = ["/media/michael/Sandisk500GB/data/msv/msv","/media/michael/Sandisk500GB/data/tylcv/tylcv","/media/michael/Sandisk500GB/data4/fmdv2/fmdv","/media/michael/Sandisk500GB/data4/hpv1/hpv1","/media/michael/Sandisk500GB/data4/tobamovirus/tobamovirus","/media/michael/Sandisk500GB/data4/rhinovirus_a/rhinovirus_a","/media/michael/Sandisk500GB/data4/hepa/hepa","/media/michael/Sandisk500GB/data/RNaseMRP_mcmc/RNaseMRP", "/media/michael/Sandisk500GB/data/ires_mcmc6/ires", "/media/michael/Sandisk500GB/data/RF00001/RF00001","/media/michael/Sandisk500GB/data/RF00002/RF00002","/media/michael/Sandisk500GB/data/RF00003/RF00003", "/media/michael/Sandisk500GB/data/RF00004/RF00004", "/media/michael/Sandisk500GB/data/RF00010/RF00010", "/media/michael/Sandisk500GB/data/RF00011/RF00011", "/media/michael/Sandisk500GB/data/RF00012/RF00012", "/media/michael/Sandisk500GB/data/RF00020/RF00020", "/media/michael/Sandisk500GB/data/RF00026/RF00026", "/media/michael/Sandisk500GB/data/RF00100/RF00100", "/media/michael/Sandisk500GB/data/RF00174/RF00174", "/media/michael/Sandisk500GB/data/RF00379/RF00379", "/media/michael/Sandisk500GB/data/RF00380/RF00380", "/media/michael/Sandisk500GB/data/RF01846/RF01846", "/media/michael/Sandisk500GB/data/RF01854/RF01854", "/media/michael/Sandisk500GB/data/RF02001/RF02001", "/media/michael/Sandisk500GB/data/RF02540/RF02540", "/media/michael/Sandisk500GB/data/RF02541/RF02541", "/media/michael/Sandisk500GB/data/RF02542/RF02542", "/media/michael/Sandisk500GB/data/RF02543/RF02543"  , "/media/michael/Sandisk500GB/data/beet_curly_mcmc/bctv", "/media/michael/Sandisk500GB/data/wdf_mcmc/wdf","/media/michael/Sandisk500GB/data/bocavirus_mcmc/bocavirus"]
-#printcomputationtables(files)
-#printcomputationtablessorted(files)
-#exit()
+    #println(getcovmatfromfile("/media/michael/Sandisk500GB/data/wdf_mcmc/wdf.B1.0.M1.0.mcmc.log"))
+    #exit()
 
-#println(getcovmatfromfile("/media/michael/Sandisk500GB/data/wdf_mcmc/wdf.B1.0.M1.0.mcmc.log"))
-#exit()
+    #files = ["/media/michael/Sandisk500GB/data/RF00010_mcmc/RF00010", "/media/michael/Sandisk500GB/data/wdf_mcmc/wdf", "/media/michael/Sandisk500GB/data/beet_curly_mcmc/bctv","/media/michael/Sandisk500GB/data/RF00001/RF00001","/media/michael/Sandisk500GB/data/RF00002/RF00002","/media/michael/Sandisk500GB/data/RF00003/RF00003"]
+    #files = ["/media/michael/Sandisk500GB/data/RF01846/RF01846"]
 
-#files = ["/media/michael/Sandisk500GB/data/RF00010_mcmc/RF00010", "/media/michael/Sandisk500GB/data/wdf_mcmc/wdf", "/media/michael/Sandisk500GB/data/beet_curly_mcmc/bctv","/media/michael/Sandisk500GB/data/RF00001/RF00001","/media/michael/Sandisk500GB/data/RF00002/RF00002","/media/michael/Sandisk500GB/data/RF00003/RF00003"]
-#files = ["/media/michael/Sandisk500GB/data/RF01846/RF01846"]
+    files = ["/media/michael/Sandisk500GB/data4/beakandfeatherdisease/beakandfeatherdisease","/media/michael/Sandisk500GB/data4/fmdv2/fmdv","/media/michael/Sandisk500GB/data4/hpv1/hpv1","/media/michael/Sandisk500GB/data4/tobamovirus/tobamovirus","/media/michael/Sandisk500GB/data4/rhinovirus_a/rhinovirus_a","/media/michael/Sandisk500GB/data4/hepa/hepa","/media/michael/Sandisk500GB/data/wdf_mcmc/wdf","/media/michael/Sandisk500GB/data/bocavirus_mcmc/bocavirus","/media/michael/Sandisk500GB/data/beet_curly_mcmc/bctv","/media/michael/Sandisk500GB/data/tylcv/tylcv","/media/michael/Sandisk500GB/data/msv/msv"]
+    files = files[1:1]
+    #printaictables(files)
+    printlargeaictable(files)
+    exit()
+    #=
+    files = ["/media/michael/Sandisk500GB/data/RF00002_mcmc/RF00002", "/media/michael/Sandisk500GB/data/RF00002_cpu/RF00002","/media/michael/Sandisk500GB/data/RF00003_mcmc/RF00003", "/media/michael/Sandisk500GB/data/RF00003_cpu/RF00003", "/media/michael/Sandisk500GB/data/RF00010_mcmc/RF00010_c2", "/media/michael/Sandisk500GB/data/RF00010_cpu/RF00010","/media/michael/Sandisk500GB/data/RF00011_mcmc/RF00011", "/media/michael/Sandisk500GB/data/RF00011_cpu/RF00011", "/media/michael/Sandisk500GB/data/RF00020_mcmc/RF00020", "/media/michael/Sandisk500GB/data/RF00020_cpu/RF00020", "/media/michael/Sandisk500GB/data/RF01846_mcmc/RF01846", "/media/michael/Sandisk500GB/data/RF01846_cpu/RF01846", "/media/michael/Sandisk500GB/data/RF00379_mcmc/RF00379", "/media/michael/Sandisk500GB/data/RF00379_cpu/RF00379", "/media/michael/Sandisk500GB/data/RF02542_mcmc/RF02542", "/media/michael/Sandisk500GB/data/RF02542_cpu/RF02542"]
 
-files = ["/media/michael/Sandisk500GB/data4/beakandfeatherdisease/beakandfeatherdisease","/media/michael/Sandisk500GB/data4/fmdv2/fmdv","/media/michael/Sandisk500GB/data4/hpv1/hpv1","/media/michael/Sandisk500GB/data4/tobamovirus/tobamovirus","/media/michael/Sandisk500GB/data4/rhinovirus_a/rhinovirus_a","/media/michael/Sandisk500GB/data4/hepa/hepa","/media/michael/Sandisk500GB/data/wdf_mcmc/wdf","/media/michael/Sandisk500GB/data/bocavirus_mcmc/bocavirus","/media/michael/Sandisk500GB/data/beet_curly_mcmc/bctv","/media/michael/Sandisk500GB/data/tylcv/tylcv","/media/michael/Sandisk500GB/data/msv/msv"]
-files = files[1:1]
-#printaictables(files)
-printlargeaictable(files)
-exit()
-#=
-files = ["/media/michael/Sandisk500GB/data/RF00002_mcmc/RF00002", "/media/michael/Sandisk500GB/data/RF00002_cpu/RF00002","/media/michael/Sandisk500GB/data/RF00003_mcmc/RF00003", "/media/michael/Sandisk500GB/data/RF00003_cpu/RF00003", "/media/michael/Sandisk500GB/data/RF00010_mcmc/RF00010_c2", "/media/michael/Sandisk500GB/data/RF00010_cpu/RF00010","/media/michael/Sandisk500GB/data/RF00011_mcmc/RF00011", "/media/michael/Sandisk500GB/data/RF00011_cpu/RF00011", "/media/michael/Sandisk500GB/data/RF00020_mcmc/RF00020", "/media/michael/Sandisk500GB/data/RF00020_cpu/RF00020", "/media/michael/Sandisk500GB/data/RF01846_mcmc/RF01846", "/media/michael/Sandisk500GB/data/RF01846_cpu/RF01846", "/media/michael/Sandisk500GB/data/RF00379_mcmc/RF00379", "/media/michael/Sandisk500GB/data/RF00379_cpu/RF00379", "/media/michael/Sandisk500GB/data/RF02542_mcmc/RF02542", "/media/michael/Sandisk500GB/data/RF02542_cpu/RF02542"]
+    for file in files
+      saveungappedlength(file)
+    end
 
-for file in files
-  saveungappedlength(file)
+    exit()=#
+
+    #files = ["/media/michael/Sandisk500GB/data/RF00001/RF00001","/media/michael/Sandisk500GB/data/RF00002/RF00002","/media/michael/Sandisk500GB/data/RF00003/RF00003", "/media/michael/Sandisk500GB/data/RF00004/RF00004", "/media/michael/Sandisk500GB/data/RF00026/RF00026", "/media/michael/Sandisk500GB/data/RF00100/RF00100", "/media/michael/Sandisk500GB/data/RF00174/RF00174", "/media/michael/Sandisk500GB/data/wdf/wdf"]
+    #printtables(files)
+    files = ["/media/michael/Sandisk500GB/data/wdf/wdf", "/media/michael/Sandisk500GB/data/msv/msv","/media/michael/Sandisk500GB/data/RF00001/RF00001", "/media/michael/Sandisk500GB/data/RF00002/RF00002", "/media/michael/Sandisk500GB/data/RF00003/RF00003", "/media/michael/Sandisk500GB/data/RF00004/RF00004","/media/michael/Sandisk500GB/data4/hepa/hepa", "/media/michael/Sandisk500GB/data4/rhinovirus_a/rhinovirus_a", "/media/michael/Sandisk500GB/data4/hpv1/hpv1"]
+    #printentropytable(files)
+    #exit()
+
+    #outputprefix = "/media/michael/Sandisk500GB/data/RF00001_mcmc2/RF00001"
+    #outputprefix = "/media/michael/Sandisk500GB/data/wdf_mcmc/wdf"
+    #outputprefix = "/media/michael/Sandisk500GB/data/beet_curly_mcmc/bctv"
+
+    #files = ["/media/michael/Sandisk500GB/data/RF00010_mcmc/RF00010","/media/michael/Sandisk500GB/data/RF00003_mcmc/RF00003", "/media/michael/Sandisk500GB/data/wdf_mcmc/wdf", "/media/michael/Sandisk500GB/data/beet_curly_mcmc/bctv","/media/michael/Sandisk500GB/data/RF00001_mcmc2/RF00001"]
+    #files = ["/media/michael/Sandisk500GB/data/tylcv/tylcv"]
+    #
+    #"/media/michael/Sandisk500GB/data4/beakandfeatherdisease/beakandfeatherdisease"
+    files = ["/media/michael/Sandisk500GB/data/wdf_mcmc/wdf","/media/michael/Sandisk500GB/data/bocavirus_mcmc/bocavirus","/media/michael/Sandisk500GB/data/beet_curly_mcmc/bctv","/media/michael/Sandisk500GB/data/tylcv/tylcv","/media/michael/Sandisk500GB/data/msv/msv", "/media/michael/Sandisk500GB/data/RF00001_mcmc2/RF00001","/media/michael/Sandisk500GB/data/RF00003_mcmc/RF00003", "/media/michael/Sandisk500GB/data/RF00010_mcmc/RF00010", "/media/michael/Sandisk500GB/data/RF00379_mcmc/RF00379", "/media/michael/Sandisk500GB/data/RF01846_mcmc/RF01846","/media/michael/Sandisk500GB/data4/hepa/hepa","/media/michael/Sandisk500GB/data4/rhinovirus_a/rhinovirus_a","/media/michael/Sandisk500GB/data4/tobamovirus/tobamovirus","/media/michael/Sandisk500GB/data4/hpv1/hpv1","/media/michael/Sandisk500GB/data4/fmdv2/fmdv"]
+
+    data = []
+    names = []
+    medians = []
+    for outputprefix in files
+      println(outputprefix)
+      m = match(r"^(.*/)([^/]*)$", outputprefix)
+      push!(names,m[2])
+      #outputdir = m[1]
+      proportions, medianGC, medianAU, medianGU = lambdaordering(outputprefix)
+      push!(data, proportions)
+      println(proportions)
+      #plotdistributions(outputprefix)
+      #plotratios(outputprefix)
+      push!(medians, [medianGC, medianAU, medianGU])
+    end
+    println(names)
+    println(data)
+    println(medians)
+    #plotstructurebenchmarks()
 end
-
-exit()=#
-
-#files = ["/media/michael/Sandisk500GB/data/RF00001/RF00001","/media/michael/Sandisk500GB/data/RF00002/RF00002","/media/michael/Sandisk500GB/data/RF00003/RF00003", "/media/michael/Sandisk500GB/data/RF00004/RF00004", "/media/michael/Sandisk500GB/data/RF00026/RF00026", "/media/michael/Sandisk500GB/data/RF00100/RF00100", "/media/michael/Sandisk500GB/data/RF00174/RF00174", "/media/michael/Sandisk500GB/data/wdf/wdf"]
-#printtables(files)
-files = ["/media/michael/Sandisk500GB/data/wdf/wdf", "/media/michael/Sandisk500GB/data/msv/msv","/media/michael/Sandisk500GB/data/RF00001/RF00001", "/media/michael/Sandisk500GB/data/RF00002/RF00002", "/media/michael/Sandisk500GB/data/RF00003/RF00003", "/media/michael/Sandisk500GB/data/RF00004/RF00004","/media/michael/Sandisk500GB/data4/hepa/hepa", "/media/michael/Sandisk500GB/data4/rhinovirus_a/rhinovirus_a", "/media/michael/Sandisk500GB/data4/hpv1/hpv1"]
-#printentropytable(files)
-#exit()
-
-#outputprefix = "/media/michael/Sandisk500GB/data/RF00001_mcmc2/RF00001"
-#outputprefix = "/media/michael/Sandisk500GB/data/wdf_mcmc/wdf"
-#outputprefix = "/media/michael/Sandisk500GB/data/beet_curly_mcmc/bctv"
-
-#files = ["/media/michael/Sandisk500GB/data/RF00010_mcmc/RF00010","/media/michael/Sandisk500GB/data/RF00003_mcmc/RF00003", "/media/michael/Sandisk500GB/data/wdf_mcmc/wdf", "/media/michael/Sandisk500GB/data/beet_curly_mcmc/bctv","/media/michael/Sandisk500GB/data/RF00001_mcmc2/RF00001"]
-#files = ["/media/michael/Sandisk500GB/data/tylcv/tylcv"]
-#
-#"/media/michael/Sandisk500GB/data4/beakandfeatherdisease/beakandfeatherdisease"
-files = ["/media/michael/Sandisk500GB/data/wdf_mcmc/wdf","/media/michael/Sandisk500GB/data/bocavirus_mcmc/bocavirus","/media/michael/Sandisk500GB/data/beet_curly_mcmc/bctv","/media/michael/Sandisk500GB/data/tylcv/tylcv","/media/michael/Sandisk500GB/data/msv/msv", "/media/michael/Sandisk500GB/data/RF00001_mcmc2/RF00001","/media/michael/Sandisk500GB/data/RF00003_mcmc/RF00003", "/media/michael/Sandisk500GB/data/RF00010_mcmc/RF00010", "/media/michael/Sandisk500GB/data/RF00379_mcmc/RF00379", "/media/michael/Sandisk500GB/data/RF01846_mcmc/RF01846","/media/michael/Sandisk500GB/data4/hepa/hepa","/media/michael/Sandisk500GB/data4/rhinovirus_a/rhinovirus_a","/media/michael/Sandisk500GB/data4/tobamovirus/tobamovirus","/media/michael/Sandisk500GB/data4/hpv1/hpv1","/media/michael/Sandisk500GB/data4/fmdv2/fmdv"]
-
-data = []
-names = []
-medians = []
-for outputprefix in files
-  println(outputprefix)
-  m = match(r"^(.*/)([^/]*)$", outputprefix)
-  push!(names,m[2])
-  #outputdir = m[1]
-  proportions, medianGC, medianAU, medianGU = lambdaordering(outputprefix)
-  push!(data, proportions)
-  println(proportions)
-  #plotdistributions(outputprefix)
-  #plotratios(outputprefix)
-  push!(medians, [medianGC, medianAU, medianGU])
-end
-println(names)
-println(data)
-println(medians)
-#plotstructurebenchmarks()

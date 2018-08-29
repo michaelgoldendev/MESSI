@@ -1,0 +1,30 @@
+\documentclass[12pt]{article}
+
+\usepackage{caption}
+\usepackage{booktabs}
+\usepackage{pdflscape}
+\usepackage{amssymb}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{mathtools}
+\usepackage{tabularx}
+
+\begin{document}
+	
+\begin{landscape}
+	\begin{table}		
+		\captionsetup{justification=centering}
+		\caption{\label{tab:lrt} Maximum likelihood estimates under five different models and likelihood ratio test p-values comparing selected nested models.}
+		\centering
+		\begin{tabular}{lcclcccccccc}
+			\toprule 
+			Model & Params & MLL & \multicolumn{1}{c}{$\Delta$MLL} & p-value & $\hat{\lambda}_{\text{\text{GC}}}$ & $\hat{\lambda}_{\text{AU}}$ & $\hat{\lambda}_{\text{GU}}$ \\
+			\midrule			
+#INSERT#																			
+			\bottomrule
+		\end{tabular}
+		{\\*\,$\text{p} < 0.05$;\; **\,$\text{p} < 0.005$;\;\,*** $\text{p} < 0.0005$;\; n.s. = not significant}
+	\end{table}
+\end{landscape}
+
+\end{document}
