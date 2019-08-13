@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="68.26667"
+   height="68.26667"
+   viewBox="0 0 63.999999 64"
+   id="svg5177"
+   version="1.1"
+   inkscape:version="0.92.1 r15371"
+   sodipodi:docname="G3_light.svg">
+  <defs
+     id="defs5179" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="11.2"
+     inkscape:cx="28.216795"
+     inkscape:cy="23.698191"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0"
+     units="px"
+     inkscape:window-width="2495"
+     inkscape:window-height="1056"
+     inkscape:window-x="65"
+     inkscape:window-y="24"
+     inkscape:window-maximized="1" />
+  <metadata
+     id="metadata5182">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(285.31785,-282.74255)">
+    <path
+       id="path5838"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:88.42823792px;line-height:69.99999881%;font-family:'Padauk Book';-inkscape-font-specification:'Padauk Book, ';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#f9f9f9;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m -249.65785,283.24255 c -5.32388,0 -10.16699,0.78518 -14.52959,2.35704 -4.28867,1.50898 -7.98477,3.61667 -11.09035,6.32026 -3.03165,2.7036 -5.39855,5.91052 -7.09923,9.62011 -1.62673,3.64671 -2.44083,7.57472 -2.44083,11.7873 0,4.14971 0.59298,8.20591 1.77606,12.16698 1.18309,3.96109 3.17812,7.4821 5.98794,10.56293 2.80982,3.01797 6.54484,5.4707 11.20322,7.35694 4.65838,1.88622 10.50027,2.82844 17.52481,2.82844 3.10559,0 6.98636,-0.34505 11.64474,-1.03667 4.65838,-0.69162 9.3922,-1.69792 14.19846,-3.01829 v -29.51945 h -26.62084 v 8.29975 h 15.08397 v 15.37299 c -2.58799,0.56586 -5.17601,1.00599 -7.76399,1.32036 -2.58799,0.25149 -5.06421,0.37542 -7.43036,0.37542 -4.21473,0 -7.83795,-0.65912 -10.8696,-1.97949 -2.9577,-1.32036 -5.39748,-3.08086 -7.31998,-5.28146 -1.9225,-2.26347 -3.32708,-4.87324 -4.21438,-7.82834 -0.88732,-2.95509 -1.33205,-6.09793 -1.33205,-9.43026 0,-3.01797 0.40831,-5.84674 1.22167,-8.48746 0.88731,-2.7036 2.25544,-5.06339 4.104,-7.07537 1.92252,-2.01198 4.36228,-3.61331 7.31998,-4.80793 3.03165,-1.1946 6.69131,-1.79176 10.97998,-1.79176 2.29222,0 4.39906,0.28096 6.32158,0.84682 1.99644,0.50299 3.66107,1.19523 4.99203,2.07547 1.4049,0.88025 2.51298,1.88654 3.32635,3.01828 0.81336,1.13174 1.22167,2.29509 1.22167,3.48969 h 11.64474 c 0,-2.20059 -0.59048,-4.33926 -1.77355,-6.41411 -1.10914,-2.13773 -2.84663,-4.02215 -5.2128,-5.65688 -2.29221,-1.63473 -5.17672,-2.95512 -8.65201,-3.9611 -3.47531,-1.00599 -7.54326,-1.51021 -12.20164,-1.51021 z"
+       inkscape:connector-curvature="0" />
+  </g>
+</svg>

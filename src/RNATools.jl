@@ -74,6 +74,7 @@ end
 function getPosteriorDecodingConsensusStructure(pairedposteriorprobs::Array{Float64,2}, unpairedposteriorprobs::Array{Float64,1}, usecuda::Bool=false, alpha::Float64=2.0)
   if usecuda
     ematrix, smatrix = computeposteriordecodingcuda(unpairedposteriorprobs, pairedposteriorprobs, alpha)
+    GC.gc()
     return posteriordecodingtraceback(smatrix)
   else
     ematrix, smatrix = iterativeposteriordecoding(pairedposteriorprobs, unpairedposteriorprobs, alpha)
@@ -107,8 +108,8 @@ function parsedbn(dbn::AbstractString)
   left = ['(','<', 'A', 'B', 'C', 'D', 'E']
   right = [')','>', 'a', 'b', 'c', 'd', 'e']
   for i=1:length(spl)
-    l = find(left .== spl[i])
-    r = find(right .== spl[i])
+    l = findall(left .== spl[i])
+    r = findall(right .== spl[i])
     if length(l) == 1
       push!(stack,i)
       push!(stackChars, l[1])
@@ -384,7 +385,7 @@ function readdbnfile(filename::String)
   return parsedbn(lines[1])
 end
 
-function writectfile(paired::Array{Int,1}, seq::String, filename::String)
+function writectfile(paired::Array{Int,1}, seq::AbstractString, filename::AbstractString)
   f = open(filename, "w")
   write(f, string(length(paired),"\n"))
   for i=1:length(paired)
@@ -394,7 +395,7 @@ function writectfile(paired::Array{Int,1}, seq::String, filename::String)
 end
 
 function runppfold(alignmentfile, treefile, outputdir)
-  readstring(`java -jar ../binaries/PPfold3.1.1.jar $alignmentfile -t $treefile --onlyCT -o $outputdir`)
+  run(`java -Xmx16G -jar ../binaries/PPfold3.1.1.jar $alignmentfile -t $treefile --onlyCT -o $outputdir`)
   m = match(r"^(.*/)([^/]*)$", alignmentfile)
   #outputdir = m[1]
   f = string(match(r"([^\\]*\.)(\w+)$",m[2])[1], "ct")
@@ -402,7 +403,8 @@ function runppfold(alignmentfile, treefile, outputdir)
 end
 
 function runrnaalifold(alignmentfile, treefile, outputdir)
-  st = readstring(`RNAalifold $alignmentfile`)
+  st = read(`"C:\\Program Files (x86)\\ViennaRNA Package\\RNAalifold.exe" $alignmentfile`, String)
+  #println("HEELLO",st)
   return parsedbn(split(st)[2])
   #println(st)
   #=

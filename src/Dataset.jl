@@ -1,7 +1,14 @@
+using SparseArrays
+
 include("AlignmentIO.jl")
 include("Tree.jl")
 
 nucmapping = Dict('A' => 1, 'C' => 2, 'G' => 3, 'T' => 4, 'U' => 4)
+
+nongaps = "ACGTUBDHKMRSVWY"
+function isgap(char::Char)
+    return !(char in nongaps)
+end
 
 function setnucleotides(data::Array{Float64,3}, seq::Int, col::Int, char::Char)
   c = uppercase(char)
@@ -109,6 +116,7 @@ mutable struct Dataset
   coding2::Array{Int,1}
   coding3::Array{Int,1}
   codonindices::Array{Int,1}
+  maxbasepairprobs::SparseMatrixCSC{Float64,Int64}
 
   function Dataset(alignment::Alignment, doroottree::Bool=true)
     sequences = alignment.sequences
@@ -186,8 +194,26 @@ mutable struct Dataset
         end
       end
     end
-    return new(data, log.(data), datalist,logdatalist, obsfreqs/sum(obsfreqs), numseqs, numcols, numnodes, seqnametoindex, root,subcolumnrefs, gapfrequency,sequences, alignment.noncoding, alignment.coding1, alignment.coding2, alignment.coding3, alignment.codonindices)
+    return new(data, log.(data), datalist,logdatalist, obsfreqs/sum(obsfreqs), numseqs, numcols, numnodes, seqnametoindex, root,subcolumnrefs, gapfrequency,sequences, alignment.noncoding, alignment.coding1, alignment.coding2, alignment.coding3, alignment.codonindices, spzeros(numcols, numcols))
   end
+end
+
+export hascanonicalbasepair
+function hascanonicalbasepair(dataset::Dataset, x::Int, y::Int)
+    pairs = Tuple{Int,Int}[(2,3),(3,2),(1,4),(4,1),(3,4),(4,3)]
+
+    for pair in pairs
+        p1 = pair[1]
+        p2 = pair[2]
+        for s=1:dataset.numseqs
+          if dataset.data[s,x,p1] > 0.0 && dataset.data[s,y,p2] > 0.0
+              if !isgap(dataset.sequences[s][x]) && !isgap(dataset.sequences[s][y])
+                  return true
+              end
+          end
+        end
+    end
+    return false
 end
 
 export getindexbyseqcol

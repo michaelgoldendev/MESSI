@@ -37,7 +37,7 @@ function Base.iterate(node::TreeNode,state::Int=1)
         return node.children[state], state+1
     else
         return nothing
-    end    
+    end
 end
 Base.length(node::TreeNode) = length(node.children)
 
@@ -230,5 +230,40 @@ function countnodes(node::TreeNode)
       s += countnode(childnode)
     end
     return 1+s
+  end
+end
+
+export getnodedepth
+function getnodedepth(node::TreeNode)
+  depth = 1
+  current = node
+  while !isnull(current.parent)
+    current = get(current.parent)
+    depth += 1
+  end
+  return depth
+end
+
+export rootnodedistance
+function rootnodedistance(node::TreeNode)
+  depth = 0.0
+  current = node
+  while !isnull(current.parent)
+    depth += current.branchlength
+    current = get(current.parent)
+  end
+  return depth
+end
+
+export countleafnodes
+function countleafnodes(node::TreeNode)
+  if isleafnode(node)
+    return 1
+  else
+    s = 0
+    for childnode in node
+      s += countleafnodes(childnode)
+    end
+    return s
   end
 end

@@ -48,7 +48,7 @@ function plotstructurebenchmarks()
   PyPlot.matplotlib[:rcParams]["text.latex.unicode"] = true
   PyPlot.matplotlib[:rc]("font", family="serif", size=21)
   fig = figure("pyplot_histogram",figsize=(14,6))
-  ax = axes()
+  ax = fig.gca()
 
   #margins(x=0,y=0,tight=false)
   metrics = ["Precision", "Recall", "F1 score", "MCC", "Weighted mountain\nsimilarity", "Mountain\nsimilarity (p=1)"]
@@ -120,7 +120,7 @@ function plotstructurebenchmarks()
     end
 
     updownerror = [[ourmethod5, ppfoldmethod5, rnaalifold5], [ourmethod95, ppfoldmethod95, rnaalifold95]]
-    b = bar(x+offsetx,y,1.35,color=colors,align="center",alpha=0.4, yerr=updownerror)
+    b = bar(x.+offsetx,y,1.35,color=colors,align="center",alpha=0.4, yerr=updownerror)
     push!(xticklabelpos, 3.0 + offsetx)
     offsetx += nmethods*2.0
 
@@ -961,6 +961,9 @@ function lambdaordering(outputprefix)
 end
 
 function main()
+    plotstructurebenchmarks()
+    exit()
+
     #files = ["/media/michael/Sandisk500GB/data/msv/msv","/media/michael/Sandisk500GB/data/tylcv/tylcv","/media/michael/Sandisk500GB/data4/fmdv2/fmdv","/media/michael/Sandisk500GB/data4/hpv1/hpv1","/media/michael/Sandisk500GB/data4/tobamovirus/tobamovirus","/media/michael/Sandisk500GB/data4/rhinovirus_a/rhinovirus_a","/media/michael/Sandisk500GB/data4/hepa/hepa","/media/michael/Sandisk500GB/data/RNaseMRP_mcmc/RNaseMRP", "/media/michael/Sandisk500GB/data/ires_mcmc6/ires", "/media/michael/Sandisk500GB/data/RF00001/RF00001","/media/michael/Sandisk500GB/data/RF00002/RF00002","/media/michael/Sandisk500GB/data/RF00003/RF00003", "/media/michael/Sandisk500GB/data/RF00004/RF00004", "/media/michael/Sandisk500GB/data/RF00010/RF00010", "/media/michael/Sandisk500GB/data/RF00011/RF00011", "/media/michael/Sandisk500GB/data/RF00012/RF00012", "/media/michael/Sandisk500GB/data/RF00020/RF00020", "/media/michael/Sandisk500GB/data/RF00026/RF00026", "/media/michael/Sandisk500GB/data/RF00100/RF00100", "/media/michael/Sandisk500GB/data/RF00174/RF00174", "/media/michael/Sandisk500GB/data/RF00379/RF00379", "/media/michael/Sandisk500GB/data/RF00380/RF00380", "/media/michael/Sandisk500GB/data/RF01846/RF01846", "/media/michael/Sandisk500GB/data/RF01854/RF01854", "/media/michael/Sandisk500GB/data/RF02001/RF02001", "/media/michael/Sandisk500GB/data/RF02540/RF02540", "/media/michael/Sandisk500GB/data/RF02541/RF02541", "/media/michael/Sandisk500GB/data/RF02542/RF02542", "/media/michael/Sandisk500GB/data/RF02543/RF02543"  , "/media/michael/Sandisk500GB/data/beet_curly_mcmc/bctv", "/media/michael/Sandisk500GB/data/wdf_mcmc/wdf","/media/michael/Sandisk500GB/data/bocavirus_mcmc/bocavirus"]
     #printcomputationtables(files)
     #printcomputationtablessorted(files)
@@ -1020,5 +1023,105 @@ function main()
     println(names)
     println(data)
     println(medians)
-    #plotstructurebenchmarks()
+    #
 end
+
+function calculateGCcontent(sequences::Array{AbstractString,1})
+  GC = 0.0
+  AT = 0.0
+  for seq in sequences
+    for c in uppercase(seq)
+      if c == 'G' || c == 'C'
+        GC += 1.0
+      elseif c == 'A' || c == 'T'  || c == 'U'
+        AT += 1.0
+      end
+    end
+  end
+  return GC/(GC+AT)
+end
+
+function calculategapfrequency(sequences::Array{AbstractString,1})
+  gaps = 0.0
+  total = 0.0
+  for seq in sequences
+    for c in uppercase(seq)
+      if c == '-'
+        gaps += 1.0
+      end
+      total += 1.0
+    end
+  end
+  return gaps/total
+end
+
+function calculatemediangapfrequency(sequences::Array{AbstractString,1})
+  gapfreqs = Float64[]
+  for col=1:length(sequences[1])
+    gaps = 0.0
+    total = 0.0
+    for seq in sequences
+      if seq[col] == '-'
+        gaps += 1.0
+      end
+      total += 1.0
+    end
+    push!(gapfreqs, gaps/total)
+  end
+  return median(gapfreqs)
+end
+
+function calculateavgpairwiseidentity(sequences::Array{AbstractString,1})
+  diversities = Float64[]
+  for (i,s1) in enumerate(sequences)
+    for (j,s2) in enumerate(sequences)
+      if i > j
+        matches = 0.0
+        total = 0.0
+        for (a,b) in zip(s1,s2)
+          if a != '-' && b != '-'
+            if a == b
+              matches += 1.0
+            end
+            total += 1.0
+          end
+        end
+        pairwisediversity = (matches/total)
+        push!(diversities, pairwisediversity)
+      end
+    end
+  end
+  return mean(diversities)
+end
+
+function printalignmentsummarytable(alignmentfiles::Array{AbstractString,1})
+  for alignment in alignmentfiles
+    m = match(r"([^\.]+)\.?.*", basename(alignment))
+    datasetname = m[1]
+    
+    sequences = AbstractString[]
+    names = AbstractString[]
+    FastaIO.FastaReader(alignment) do fr
+        for (desc, seq) in fr
+           push!(names,desc)
+           push!(sequences, seq)
+        end
+    end
+    GCcontent = calculateGCcontent(sequences)
+    gapfrequency = calculategapfrequency(sequences)
+    mediancolumngapfrequency = calculatemediangapfrequency(sequences)
+    avgpairwiseidentity = calculateavgpairwiseidentity(sequences)
+    println(datasetname," & ", length(sequences)," & ", length(sequences[1]), " & ", @sprintf("%.1f", GCcontent*100.0),"%", " & ", @sprintf("%.1f", gapfrequency*100.0),"%", " & ", @sprintf("%.1f", mediancolumngapfrequency*100.0),"%", " & ", @sprintf("%.1f", avgpairwiseidentity*100.0), "%")
+  end
+end
+#=
+rfamdir = "../datasets/RFAM/3D/"
+alignmentfiles = AbstractString[]
+for f in filter(x -> match(r".+\.fas", x) != nothing, readdir(rfamdir))  
+  push!(alignmentfiles, joinpath(rfamdir,f))
+end
+println("numfiles $(length(alignmentfiles))")
+
+printalignmentsummarytable(alignmentfiles)
+=#
+#main()

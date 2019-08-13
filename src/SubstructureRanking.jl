@@ -52,7 +52,11 @@ function generatesubstructures(paired::Array{Int,1}, minlength::Int, maxsublengt
         if sublen <= maxlength
 
         else
-            push!(finalendpoints, (endpoints[startr][1], endpoints[r-1][2]))
+            println("E:", endpoints[startr][1])
+            if r-1 > 0
+
+                push!(finalendpoints, (endpoints[startr][1], endpoints[r-1][2]))
+            end
             startr = r
         end
         r += 1
@@ -116,9 +120,13 @@ function mannwhitneyu(x,y)
     tieCorrectionFactor = 0.0
     d = ((bigN^3.0 - bigN) / 12.0 - tieCorrectionFactor)
     variance = sqrt(n*d)
-    mann = MannWhitneyUTest(x, y)
-    zscore =  (mann.U - (nx * ny / 2.0)) / variance
-    return zscore, pvalue(mann)
+    if length(x) > 2 && length(y) > 2
+        mann = MannWhitneyUTest(x, y)
+        zscore =  (mann.U - (nx * ny / 2.0)) / variance
+        return zscore, pvalue(mann)
+    else
+        return 0.0, 1.0
+    end
 end
 
 function substructureranking(paired, data, references,mapping,revmapping, ascending=true, bothnucleotides::Bool=false, unpairedsites::Bool=false)
@@ -128,7 +136,7 @@ function substructureranking(paired, data, references,mapping,revmapping, ascend
         println("mapping: ", ref[1], " -> ", refpos)
     end
 
-    substructures = enumeratesubstructures(paired,10,350)
+    substructures = enumeratesubstructures(paired,20,250)
     ls = []
     finalls = []
     id = 1
@@ -196,6 +204,7 @@ function substructureranking(paired, data, references,mapping,revmapping, ascend
 end
 end
 #ls = reverse(sort(ls))
+finalls = sort(finalls)
 ls = sort(ls)
 texls = []
 csv = ""

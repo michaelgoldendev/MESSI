@@ -1,5 +1,6 @@
 #include("SubstructureRanking.jl")
 using Printf
+include("Viridis.jl")
 
 function pairedsitesgraph(pairedsites::Array{Int,1})
   fout = open("outfile.json", "w")
@@ -21,48 +22,6 @@ function pairedsitesgraph(pairedsites::Array{Int,1})
   write(fout, "]\n\n")
   write(fout, "}\n")
   close(fout)
-end
-
-struct ColorGradient
-  colors::Array{Tuple{Int,Int,Int,Float64},1}
-  positions::Array{Float64}
-
-  function ColorGradient(colors::Array{Tuple{Int,Int,Int,Float64},1}, positions::Array{Float64})
-    new(colors,positions)
-  end
-end
-
-include("Viridis.jl")
-
-function getcolor(gradient::ColorGradient, v::Float64)
-  cstart = gradient.colors[1]
-  cend = gradient.colors[end]
-
-  lower = 0.0
-  upper = 1.0
-  for i=1:length(gradient.positions)-1
-    if v >= gradient.positions[i] && v <= gradient.positions[i+1]
-      cstart = gradient.colors[i]
-      cend = gradient.colors[i+1]
-      lower = gradient.positions[i]
-      upper = gradient.positions[i+1]
-      break
-    end
-  end
-
-  p = (v-lower)/(upper-lower)
-  r = cstart[1] + trunc(Int, p*(cend[1]-cstart[1]))
-  g = cstart[2] + trunc(Int, p*(cend[2]-cstart[2]))
-  b = cstart[3] + trunc(Int, p*(cend[3]-cstart[3]))
-  a = cstart[4] + p*(cend[4]-cstart[4])
-  return (r,g,b,a)
-end
-
-function rgbstring(r::Int, g::Int, b::Int, alpha::Float64)
-  return string("rgb(",r,",",g,",",b,");opacity:",alpha)
-end
-function rgbstring(color::Tuple)
-  return string("rgb(",color[1],",",color[2],",",color[3],");opacity:",color[4])
 end
 
 function sequencelogo(id::AbstractString, x::Float64, y::Float64, width::Float64, height::Float64, h2::Array{Float64,1}, additionaltags::AbstractString="", uselight::Bool=false)
@@ -374,12 +333,8 @@ end
  write(svgout, "</svg>\n")
 end
 
-function drawstructure(outfile, dataset::Dataset, paired::Array{Int,1}, backvalues::Array{Float64,1}, linkvalues::Array{Float64,1}, linkvalues2::Array{Float64,1}, mapping, visible::Array{Int,1}=Int[])
-  #linkgradient = ColorGradient([(0,0,255,1.0),(255,0,0,1.0)], [0.0,1.0])
-
-  #ylorrd = [[1.0,1.0,0.84],[1.0,0.93,0.64],[1.0,0.85,0.49],[0.99,0.69,0.35],[0.99,0.55,0.29],[0.98,0.32,0.22],[0.88,0.14,0.16],[0.73,0.06,0.18],[0.49,0.04,0.17]]
-  #ylorrd = reverse(ylorrd)
-
+function drawsplayedstructure(outfile, dataset::Dataset, paired::Array{Int,1}, backvalues::Array{Float64,1}, linkvalues::Array{Float64,1}, linkvalues2::Array{Float64,1}, mapping, visible::Array{Int,1}=Int[])
+  maxcoevolutionvalue = 10.0
   ylgnbu = reverse([[1.0,1.0,0.85],[0.93,0.98,0.71],[0.78,0.91,0.71],[0.50,0.80,0.73],[0.27,0.71,0.76],[0.15,0.56,0.74],[0.15,0.37,0.64],[0.16,0.22,0.56],[0.06,0.14,0.34]])
 
   shapecolors = [(0,0,0,1.0),(0,0,0,1.0),  (33,177,79,1.0),(33,177,79,1.0),  (250,200,36,1.0),(250,200,36,1.0), (244,23,28,1.0),(244,23,28,1.0),(244,23,28,1.0)]
@@ -388,12 +343,13 @@ function drawstructure(outfile, dataset::Dataset, paired::Array{Int,1}, backvalu
 
 
 
-  linkgradient =  viridisgradient(ylgnbu)
+  #linkgradient =  viridisgradient(ylgnbu)
+  linkgradient =  viridisgradient(_viridis_data)
   #backgradient =  viridisgradient(_viridis_data)
   backgradient =  shapegradient
-  drawlegend(string(outfile, ".substitutionrate.svg"), backgradient, ["low", "moderate", "high"])
-  drawlegend(string(outfile, ".coevolutionprobability.svg"), linkgradient, ["0.00", "0.25", "0.50", "0.75", "1.00"])
-  drawlegend(string(outfile, ".shape.svg"), shapegradient, ["0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0"])
+  #drawlegend(string(outfile, ".substitutionrate.svg"), backgradient, ["low", "moderate", "high"])
+  #drawlegend(string(outfile, ".coevolutionprobability.svg"), linkgradient, ["0.00", "0.25", "0.50", "0.75", "1.00"])
+  #drawlegend(string(outfile, ".shape.svg"), shapegradient, ["0.0", "0.1", "0.2", "0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "1.0"])
   points, minx, miny, maxx, maxy = splaystructure(paired, 1, 350, 150, visible)
   numpoints = length(points)
 
@@ -506,7 +462,7 @@ function drawstructure(outfile, dataset::Dataset, paired::Array{Int,1}, backvalu
         linewidth = 8.0
       end
       #println("DIST=",dist)
-      write(svgout, string("<path id=\"bond_", i,"\" d=\"M", points[i][1], ",",points[i][2]," L", points[j][1],",", points[j][2] ,"\" style=\"fill:none;stroke-width:", linewidth,";stroke:", rgbstring(getcolor(linkgradient, linkvalues[i])),"\""))
+      write(svgout, string("<path id=\"bond_", i,"\" d=\"M", points[i][1], ",",points[i][2]," L", points[j][1],",", points[j][2] ,"\" style=\"fill:none;stroke-width:", linewidth,";stroke:", rgbstring(getcolor(linkgradient, linkvalues[i]/maxcoevolutionvalue)),"\""))
       #write(svgout, "/>\n")
       write(svgout, string(""" cursor="help" onmousemove="ShowTooltip(evt, '""", @sprintf("Posterior probability γ≠0: %0.3f", linkvalues[i]),";  ",@sprintf("posterior probability paired: %0.3f",linkvalues2[i]),"""')" onmouseout="HideTooltip(evt)"/>\n"""))
     end

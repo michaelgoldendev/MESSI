@@ -1603,6 +1603,7 @@ function coevolutionall(dataset::Dataset, params::ModelParameters, parallel::Boo
   if integratesiterates && usecuda
     museparams = getmusespecificparamsarray(params)
     mat, ret = felsensteincuda(dataset, params, museparams,maxbasepairdistance,keepmatrices)
+    GC.gc()
     return mat,ret
   else
     #tic()
@@ -2347,6 +2348,7 @@ function computemodellikelihood(rng::AbstractRNG, dataset::Dataset,params::Model
       #tic()
       unpairedll = sum(computeunpairedlikelihoods(dataset, params, museparams, params.states, paired, 1.0, false, rng, true))
       pairedll = felsensteincudapaired(dataset, paired, params, museparams)
+      GC.gc()
       #elapsed = toq()
       #logtime("structurell_cuda", elapsed, dataset.numcols)
     else

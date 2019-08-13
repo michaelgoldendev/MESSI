@@ -13,6 +13,43 @@ function eye(n::Int)
     return mat
 end
 
+function spearmanspvalue(x1::Array{Float64,1}, y1::Array{Float64,1})
+    n = length(x1)
+    r = corspearman(x1,y1)
+    t = r*sqrt((n-2.0)/(1.0-(r*r)))
+    p = cdf(TDist(n-2), -abs(t))
+
+    stderr = 1.0 /sqrt(n - 3.0)
+    delta = 1.96 * stderr
+    lower = tanh(atanh(r) - delta)
+    upper = tanh(atanh(r) + delta)
+    return r,lower,upper,n,p
+end
+
+function spearmanspvalue(paired::Array{Int,1}, x::Array{Float64,1}, y::Array{Float64,1})
+
+    x1 = Float64[]
+    y1 = Float64[]
+    for i=1:length(x)
+        if paired[i] > i
+            if !isnan(x[i]) && !isnan(y[i])
+                push!(x1, x[i] + randn()*1e-10)
+                push!(y1, y[i] + randn()*1e-10)
+            end
+        end
+    end
+    n = length(x1)
+    r = corspearman(x1,y1)
+    t = r*sqrt((n-2.0)/(1.0-(r*r)))
+    p = cdf(TDist(n-2), -abs(t))
+
+    stderr = 1.0 /sqrt(n - 3.0)
+    delta = 1.96 * stderr
+    lower = tanh(atanh(r) - delta)
+    upper = tanh(atanh(r) + delta)
+    return r,lower,upper,n,p
+end
+
 function softmapping(mapping::Array{Int,1})
     ret = zeros(Int, length(mapping))
     for i=1:length(mapping)

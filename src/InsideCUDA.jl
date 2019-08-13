@@ -1,6 +1,6 @@
 include("InsideOutsideAlgorithm.jl")
 try
-  using CUDAdrv
+  using CUDAdrv, CUDAnative, CuArrays
 catch
   println("Unable to use CUDA GPU acceleration.")
 end
@@ -24,7 +24,9 @@ function computeinsideKH99(unpairedlogprobs::Array{Float64,1}, pairedlogprobs::A
   usecuda = usecudain
   if usecuda
     try
-      return computeinsidecuda(unpairedlogprobs, pairedlogprobs, B, zonly)
+      ret = computeinsidecuda(unpairedlogprobs, pairedlogprobs, B, zonly)
+      GC.gc()
+      return ret
     catch e
         println("CUDA GPU not available.")
         usecuda = false
@@ -43,7 +45,9 @@ end
 
 function computeoutsideKH99(inside::Array{Float64,3}, unpairedlogprobs::Array{Float64,1}, pairedlogprobs::Array{Float64,2}, usecuda::Bool=true)
   if usecuda
-    return computeoutsidecuda(inside,unpairedlogprobs, pairedlogprobs)
+    ret =  computeoutsidecuda(inside,unpairedlogprobs, pairedlogprobs)
+    GC.gc()
+    return ret
   else
     return computeoutside(inside,unpairedlogprobs, pairedlogprobs, KH99())
   end
@@ -86,7 +90,7 @@ function computeinsidecuda(unpairedlogprobs::Array{Float32,1}, pairedlogprobs::A
 
   md = CuModuleFile(joinpath(@__DIR__,"cuda","inside.ptx"))
 
-  d_Z = Mem.alloc(Float32,1)
+  d_Z = CuArray(zeros(Float32,1))
   #cudainitialiseinside = CuFunction(md, "_Z16initialiseinsidePfPKfi")
   cudainitialiseinside2 = CuFunction(md, "_Z16initialiseinsidePfS_S_PKfi")
   #cudainside = CuFunction(md, "_Z15insidealgorithmPfPKfS1_iif")
@@ -94,40 +98,40 @@ function computeinsidecuda(unpairedlogprobs::Array{Float32,1}, pairedlogprobs::A
   cudainsidez = CuFunction(md, "_Z7insidezPKfPfi")
   blocksize = 256
 
-  d_unpairedlogprobs= Mem.upload(unpairedlogprobs)
-  d_pairedlogprobs = Mem.upload(Array(transpose(pairedlogprobs)))
+  d_unpairedlogprobs= CuArray(unpairedlogprobs)
+  d_pairedlogprobs = CuArray(Array(transpose(pairedlogprobs)))
 
   if zonly
-    d_insideS = Mem.alloc(Float32, len*len)
-    d_insideL = Mem.alloc(Float32, len*len)
-    d_insideF = Mem.alloc(Float32, len*len)
-    cudacall(cudainitialiseinside2, (Ptr{Float32}, Ptr{Float32}, Ptr{Float32}, Ptr{Float32}, Int32), d_insideS, d_insideL, d_insideF, d_unpairedlogprobs, len, blocks=div(len+blocksize-1, blocksize), threads=blocksize)
+    d_insideS = CuArray(zeros(Float32,len,len))
+    d_insideL = CuArray(zeros(Float32,len,len))
+    d_insideF = CuArray(zeros(Float32,len,len))
+    cudacall(cudainitialiseinside2, (CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, Cint), d_insideS, d_insideL, d_insideF, d_unpairedlogprobs, len, blocks=div(len+blocksize-1, blocksize), threads=blocksize)
     for a=1:len-1
-      cudacall(cudainside2, (Ptr{Float32}, Ptr{Float32}, Ptr{Float32}, Ptr{Float32}, Ptr{Float32}, Int32, Int32, Float32), d_insideS, d_insideL, d_insideF, d_pairedlogprobs, d_unpairedlogprobs, a, len, Float32(B), blocks=div(len+blocksize-1, blocksize), threads=blocksize)
+      cudacall(cudainside2, (CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, Cint, Cint, Cfloat), d_insideS, d_insideL, d_insideF, d_pairedlogprobs, d_unpairedlogprobs, a, len, Float32(B), blocks=div(len+blocksize-1, blocksize), threads=blocksize)
     end
-    cudacall(cudainsidez, (Ptr{Float32}, Ptr{Float32}, Int32), d_insideS, d_Z, len, blocks=div(len+blocksize-1, blocksize), threads=blocksize)
-    Zvec = Mem.download(Float32, d_Z, 1)
-    Mem.free(d_unpairedlogprobs)
-    Mem.free(d_pairedlogprobs)
-    Mem.free(d_insideS)
-    Mem.free(d_insideL)
-    Mem.free(d_insideF)
-    Mem.free(d_Z)
-    GC.gc()
+    cudacall(cudainsidez, (CuPtr{Cfloat}, CuPtr{Cfloat}, Cint), d_insideS, d_Z, len, blocks=div(len+blocksize-1, blocksize), threads=blocksize)
+    Zvec = Array(d_Z)
+    #Mem.free(d_unpairedlogprobs)
+    #Mem.free(d_pairedlogprobs)
+    #Mem.free(d_insideS)
+    #Mem.free(d_insideL)
+    #Mem.free(d_insideF)
+    #Mem.free(d_Z)
+    #GC.gc()
     destroy!(ctx)
-    synchronize(ctx)
+    #synchronize(ctx)
     return Float64(Zvec[1])
   else
-    d_insideS = Mem.alloc(Float32, len*len)
-    d_insideL = Mem.alloc(Float32, len*len)
-    d_insideF = Mem.alloc(Float32, len*len)
-    cudacall(cudainitialiseinside2, (Ptr{Float32}, Ptr{Float32}, Ptr{Float32}, Ptr{Float32}, Int32), d_insideS, d_insideL, d_insideF, d_unpairedlogprobs, len, blocks=div(len+blocksize-1, blocksize), threads=blocksize)
+    d_insideS = CuArray(zeros(Float32,len,len))
+    d_insideL = CuArray(zeros(Float32,len,len))
+    d_insideF = CuArray(zeros(Float32,len,len))
+    cudacall(cudainitialiseinside2, (CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, Cint), d_insideS, d_insideL, d_insideF, d_unpairedlogprobs, len, blocks=div(len+blocksize-1, blocksize), threads=blocksize)
     for a=1:len-1
-      cudacall(cudainside2, (Ptr{Float32}, Ptr{Float32}, Ptr{Float32}, Ptr{Float32}, Ptr{Float32}, Int32, Int32, Float32), d_insideS, d_insideL, d_insideF, d_pairedlogprobs, d_unpairedlogprobs, a, len, Float32(B), blocks=div(len+blocksize-1, blocksize), threads=blocksize)
+      cudacall(cudainside2, (CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, Cint, Cint, Cfloat), d_insideS, d_insideL, d_insideF, d_pairedlogprobs, d_unpairedlogprobs, a, len, Float32(B), blocks=div(len+blocksize-1, blocksize), threads=blocksize)
     end
 
     inside = zeros(Float64, numnonterminals, len, len)
-    insidevec = Mem.download(Float32, d_insideS, len*len)
+    insidevec = Array(d_insideS)
     index = 1
     for i=1:len
       for j=1:len
@@ -135,7 +139,7 @@ function computeinsidecuda(unpairedlogprobs::Array{Float32,1}, pairedlogprobs::A
         index += 1
       end
     end
-    insidevec = Mem.download(Float32, d_insideF, len*len)
+    insidevec = Array(d_insideF)
     index = 1
     for i=1:len
       for j=1:len
@@ -143,7 +147,7 @@ function computeinsidecuda(unpairedlogprobs::Array{Float32,1}, pairedlogprobs::A
         index += 1
       end
     end
-    insidevec = Mem.download(Float32, d_insideL, len*len)
+    insidevec = Array(d_insideL)
     index = 1
     for i=1:len
       for j=1:len
@@ -151,15 +155,15 @@ function computeinsidecuda(unpairedlogprobs::Array{Float32,1}, pairedlogprobs::A
         index += 1
       end
     end
-    Mem.free(d_unpairedlogprobs)
-    Mem.free(d_pairedlogprobs)
-    Mem.free(d_insideS)
-    Mem.free(d_insideL)
-    Mem.free(d_insideF)
-    Mem.free(d_Z)
-    GC.gc()
+    #Mem.free(d_unpairedlogprobs)
+    #Mem.free(d_pairedlogprobs)
+    #Mem.free(d_insideS)
+    #Mem.free(d_insideL)
+    #Mem.free(d_insideF)
+    #Mem.free(d_Z)
+    #GC.gc()
     destroy!(ctx)
-    synchronize(ctx)
+    #synchronize(ctx)
     return inside
   end
 end
@@ -175,26 +179,26 @@ function computeposteriordecodingcuda(singleprobsin::Array{Float64,1}, pairprobs
   cudaposteriordecoding = CuFunction(md, "_Z17posteriordecodingPfPiPKfS2_iif")
   blocksize = 256
 
-  d_singleprobs = Mem.upload(singleprobs)
-  d_pairprobs = Mem.upload(pairprobs)
+  d_singleprobs = CuArray(singleprobs)
+  d_pairprobs = CuArray(pairprobs)
   ematrix = zeros(Float32, len, len)
   for i=1:len
     #ematrix[i,i] = singleprobs[i]
   end
-  d_ematrix=  Mem.upload(ematrix)
-  d_smatrix= Mem.upload(zeros(Int32, len, len))
+  d_ematrix=  CuArray(ematrix)
+  d_smatrix= CuArray(zeros(Int32, len, len))
   for diag=2:len
-    cudacall(cudaposteriordecoding, (Ptr{Float32}, Ptr{Int32}, Ptr{Float32}, Ptr{Float32}, Int32, Int32, Float32), d_ematrix, d_smatrix, d_pairprobs, d_singleprobs, convert(Int32, len), convert(Int32, diag-1), convert(Float32, alpha), blocks=div(len+blocksize-1, blocksize), threads=blocksize)
+    cudacall(cudaposteriordecoding, (CuPtr{Cfloat}, CuPtr{Cint}, CuPtr{Cfloat}, CuPtr{Cfloat}, Cint, Cint, Cfloat), d_ematrix, d_smatrix, d_pairprobs, d_singleprobs, convert(Int32, len), convert(Int32, diag-1), convert(Float32, alpha), blocks=div(len+blocksize-1, blocksize), threads=blocksize)
   end
-  ematrix = Array(transpose(reshape(Mem.download(Float32, d_ematrix, len*len), (len,len))))
-  smatrix = Array(transpose(reshape(Mem.download(Int32, d_smatrix, len*len), (len,len))))
-  Mem.free(d_singleprobs)
-  Mem.free(d_pairprobs)
-  Mem.free(d_ematrix)
-  Mem.free(d_smatrix)
-  GC.gc()
+  ematrix = Array(transpose(reshape(Array(d_ematrix), (len,len))))
+  smatrix = Array(transpose(reshape(Array(d_smatrix), (len,len))))
+  #Mem.free(d_singleprobs)
+  #Mem.free(d_pairprobs)
+  #Mem.free(d_ematrix)
+  #Mem.free(d_smatrix)
+  #GC.gc()
   destroy!(ctx)
-  synchronize(ctx)
+  #synchronize(ctx)
   return convert(Array{Float64, 2}, ematrix), convert(Array{Int, 2}, smatrix)
 end
 
@@ -252,14 +256,14 @@ end
 devlist = devices(dev->true)
 dev = device(devlist[1])
 md = CuModuleFile("cuda/insidedouble.ptx")
-d_inside = Mem.upload(insidevec)
-d_pairedlogprobs = Mem.upload(transpose(pairedlogprobs))
-d_unpairedlogprobs= Mem.upload(unpairedlogprobs)
+d_inside = CuArray(insidevec)
+d_pairedlogprobs = CuArray(transpose(pairedlogprobs))
+d_unpairedlogprobs= CuArray(unpairedlogprobs)
 cudainside = CuFunction(md, "_Z15insidealgorithmPdPKdS1_iid")
 blocksize = 512
 
 for a=1:len-1
-cudacall(cudainside, div(len+blocksize-1, blocksize), blocksize, (Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Int32, Int32, Float64), d_inside, d_pairedlogprobs, d_unpairedlogprobs, a, len, Float64(B))
+cudacall(cudainside, div(len+blocksize-1, blocksize), blocksize, (CuArray{Float64}, CuArray{Float64}, CuArray{Float64}, Int32, Int32, Float64), d_inside, d_pairedlogprobs, d_unpairedlogprobs, a, len, Float64(B))
 end
 insidevec = to_host(d_inside)
 #pairedlogprobs = to_host(d_pairedlogprobs)
@@ -340,20 +344,20 @@ function computeoutsidecuda(inside::Array{Float32,3}, unpairedlogprobs::Array{Fl
   dev = CuDevice(0)
   ctx = CuContext(dev)
   md = CuModuleFile(joinpath(@__DIR__,"cuda","inside.ptx"))
-  d_outside = Mem.upload(outsidevec)
-  d_inside = Mem.upload(insidevec)
-  d_pairedlogprobs = Mem.upload(Array(transpose(pairedlogprobs)))
-  d_unpairedlogprobs= Mem.upload(unpairedlogprobs)
+  d_outside = CuArray(outsidevec)
+  d_inside = CuArray(insidevec)
+  d_pairedlogprobs = CuArray(Array(transpose(pairedlogprobs)))
+  d_unpairedlogprobs= CuArray(unpairedlogprobs)
   cudaoutside = CuFunction(md, "_Z16outsidealgorithmPfPKfS1_S1_iif")
   blocksize = 1024
 
   a = len - 2
   while a >= 0
-    cudacall(cudaoutside, (Ptr{Float32}, Ptr{Float32}, Ptr{Float32}, Ptr{Float32}, Int32, Int32, Float32), d_outside, d_inside, d_pairedlogprobs, d_unpairedlogprobs, a, len, Float32(B), blocks=div(len+blocksize-1, blocksize), threads=blocksize)
+    cudacall(cudaoutside, (CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, Cint, Cint, Cfloat), d_outside, d_inside, d_pairedlogprobs, d_unpairedlogprobs, a, len, Float32(B), blocks=div(len+blocksize-1, blocksize), threads=blocksize)
     a -= 1
   end
 
-  outsidevec = Mem.download(Float32, d_outside, 3*len*len)
+  outsidevec = Array(d_outside)
 
   index = 1
   for s=1:3
@@ -365,9 +369,9 @@ function computeoutsidecuda(inside::Array{Float32,3}, unpairedlogprobs::Array{Fl
     end
   end
 
-  GC.gc()
+  #GC.gc()
   destroy!(ctx)
-  synchronize(ctx)
+  #synchronize(ctx)
 
   return convert(Array{Float64,3}, outside)
 end

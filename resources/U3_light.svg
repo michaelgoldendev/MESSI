@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="68.26667"
+   height="68.26667"
+   viewBox="0 0 63.999999 64"
+   id="svg5177"
+   version="1.1"
+   inkscape:version="0.92.1 r15371"
+   sodipodi:docname="U3_light.svg">
+  <defs
+     id="defs5179" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="11.2"
+     inkscape:cx="28.216795"
+     inkscape:cy="23.698191"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="false"
+     fit-margin-top="0"
+     fit-margin-left="0"
+     fit-margin-right="0"
+     fit-margin-bottom="0"
+     units="px"
+     inkscape:window-width="2495"
+     inkscape:window-height="1056"
+     inkscape:window-x="65"
+     inkscape:window-y="24"
+     inkscape:window-maximized="1" />
+  <metadata
+     id="metadata5182">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Layer 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(285.31785,-282.74255)">
+    <path
+       id="path5846"
+       style="font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;font-size:86.74867249px;line-height:69.99999881%;font-family:'Padauk Book';-inkscape-font-specification:'Padauk Book, ';text-align:center;letter-spacing:0px;word-spacing:0px;text-anchor:middle;fill:#f9f9f9;fill-opacity:1;stroke:none;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1"
+       d="m -284.81785,283.24255 v 34.95843 c 0,9.53948 2.52111,16.61246 7.561,21.22214 5.03989,4.54566 12.92045,6.81943 23.64021,6.81943 10.47979,0 18.3993,-2.24037 23.75919,-6.72201 5.35989,-4.54566 8.0396,-11.65204 8.0396,-21.31956 v -34.95843 h -12.59889 v 34.95843 c 0,4.03347 -0.48139,7.32944 -1.44138,9.89038 -0.95997,2.56094 -2.32069,4.5786 -4.08067,6.05113 -1.67995,1.40852 -3.67793,2.39954 -5.99788,2.97575 -2.31995,0.51219 -4.84105,0.76829 -7.561,0.76829 -2.71994,0 -5.24104,-0.2561 -7.56099,-0.76829 -2.31996,-0.57621 -4.31793,-1.56723 -5.9979,-2.97575 -1.67997,-1.47253 -3.00173,-3.49019 -3.9617,-6.05113 -0.95999,-2.56094 -1.43862,-5.85691 -1.43862,-9.89038 v -34.95843 z"
+       inkscape:connector-curvature="0" />
+  </g>
+</svg>

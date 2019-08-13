@@ -1,5 +1,5 @@
 using FastaIO
-
+#using RNATools
 
 function getdinuccode(c, d)
   nuc1 = get(nucmapping, c, 0)
@@ -183,7 +183,12 @@ function computeCovariation(paired, fastafile, newickfile)
 
     return mutualinformation, rnaalifold_mutualinformation, mutualinformation_stacking
 end
-
+#=
+fastafile = "/media/michael/Sandisk500GB/Dropbox/dev/farce-julia/src/mcmc/hiv1b/hiv1b.fas.norm"
+newickfile = "/media/michael/Sandisk500GB/Dropbox/dev/farce-julia/src/mcmc/hiv1b/hiv1b.nwk"
+sequence, pairedsites = readctfile("/media/michael/Sandisk500GB/Dropbox/dev/farce-julia/src/mcmc/hiv1b/hiv1b.max.consensus.ct")
+mutualinformation, rnaalifold_mutualinformation, mutualinformation_stacking = computeCovariation(pairedsites, fastafile, newickfile)
+=#
 #=
 fastafile = "/media/michael/Sandisk500GB/data/hiv1.fas.norm50.structure.align"
 newickfile = "/media/michael/Sandisk500GB/data/hiv1_4/hiv.nwk"

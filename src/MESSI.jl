@@ -1,5 +1,26 @@
-#addprocs(1)
-#addprocs(8)
+using Pkg
+#=
+Pkg.add(PackageSpec(name="ArgParse", uuid="c7e460c6-2fb9-53a9-8c5b-16f535851c63"))
+Pkg.add(PackageSpec(name="CSV", uuid="336ed68f-0bac-5ca0-87d4-7b16caf5d00b"))
+Pkg.add(PackageSpec(name="CUDAdrv", uuid="c5f51814-7f29-56b8-a69c-e4d8f6be1fde"))
+Pkg.add(PackageSpec(name="DataFrames", uuid="a93c6f00-e57d-5684-b7b6-d8193f3e46c0"))
+Pkg.add(PackageSpec(name="DataStructures", uuid="864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"))
+Pkg.add(PackageSpec(name="Distributions", uuid="31c24e10-a181-5473-b8eb-7969acd0382f"))
+Pkg.add(PackageSpec(name="FastaIO", uuid="a0c94c4b-ebed-5953-b5fc-82fe598ac79f"))
+Pkg.add(PackageSpec(name="Formatting", uuid="59287772-0a20-5a39-b81b-1366585eb4c0"))
+Pkg.add(PackageSpec(name="HypothesisTests", uuid="09f84164-cd44-5f33-b23f-e6b0d136a0d5"))
+Pkg.add(PackageSpec(name="JSON", uuid="682c06a0-de6a-54ab-a142-c8b1cf79cde6"))
+Pkg.add(PackageSpec(name="NLopt", uuid="76087f3c-5699-56af-9a33-bf431cd00edd"))
+Pkg.add(PackageSpec(name="Nullables", uuid="4d1e1d77-625e-5b40-9113-a560ec7a8ecd"))
+Pkg.add(PackageSpec(name="PyPlot", uuid="d330b81b-6aea-500a-939a-2ce795aea3ee"))
+Pkg.add(PackageSpec(name="StatsBase", uuid="2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"))
+Pkg.add(PackageSpec(name="Blosc", uuid="a74b3585-a348-5f62-a45c-50e91977d574"))
+Pkg.add(PackageSpec(name="HDF5", uuid="f67ccb44-e63f-5c2f-98bd-6dc0ccc4ba2f"))
+Pkg.add(PackageSpec(name="SHA", uuid="ea8e919c-243c-51af-8825-aaa63cd721ce"))
+Pkg.add("CUDAnative")
+Pkg.add("CuArrays")
+=#
+
 push!(LOAD_PATH,joinpath(@__DIR__))
 using Binaries
 
@@ -18,6 +39,8 @@ include("RankingAndVisualisation.jl")
 using Distributions
 using Printf
 using CommonUtils
+using RNABinaries
+using SparseArrays
 
 include("StructurePlotsAndTables.jl")
 
@@ -78,7 +101,7 @@ function parse_commandline()
         "--maxmcemiter"
         help = ""
         arg_type = Int
-        default = 200
+        default = 150
         "--shuffle"
         help = ""
         action = :store_true
@@ -122,6 +145,13 @@ function parse_commandline()
         help = ""
         arg_type = Int
         default = 1
+        "--expcanonicalconstraints"
+        help = "EXPERIMENTAL. Only consider pairs of sites with at least one GC, AU, or GU pair."
+        action = :store_true
+        "--expcanonicalrnafold"
+        help = "EXPERIMENTAL. Fold sequences at specified temperature in degrees celsius and use base-pair probabilities to constrain which sites may pair."
+        arg_type = Float64
+        default = -1000.0
     end
 
     return parse_args(s)
@@ -134,45 +164,6 @@ function printmatrix(mat::Array{Float64,2})
         ret = string(ret,join(AbstractString[string(@sprintf("%.4f", v)) for v in mat[i,:]], "\t"), "\n")
     end
     return ret
-end
-
-function spearmanspvalue(x1::Array{Float64,1}, y1::Array{Float64,1})
-    n = length(x1)
-    r = corspearman(x1,y1)
-    t = r*sqrt((n-2.0)/(1.0-(r*r)))
-    p = cdf(TDist(n-2), -abs(t))
-
-    stderr = 1.0 /sqrt(n - 3.0)
-    delta = 1.96 * stderr
-    lower = tanh(atanh(r) - delta)
-    upper = tanh(atanh(r) + delta)
-    return r,lower,upper,n,p
-end
-
-function spearmanspvalue(paired::Array{Int,1}, x::Array{Float64,1}, y::Array{Float64,1})
-
-    x1 = Float64[]
-    y1 = Float64[]
-    for i=1:length(x)
-        if paired[i] > i
-            if !isnan(x[i]) && !isnan(y[i])
-                push!(x1, x[i] + randn()*1e-10)
-                push!(y1, y[i] + randn()*1e-10)
-            end
-        end
-    end
-    println("!!!!", length(x1))
-    n = length(x1)
-    r = corspearman(x1,y1)
-    t = r*sqrt((n-2.0)/(1.0-(r*r)))
-    p = cdf(TDist(n-2), -abs(t))
-
-    stderr = 1.0 /sqrt(n - 3.0)
-    delta = 1.96 * stderr
-    lower = tanh(atanh(r) - delta)
-    upper = tanh(atanh(r) + delta)
-    #return r,lower,upper,t,p
-    return r,lower,upper,n,p
 end
 
 function mapstructure(dataset, fastafile, ctfile)
@@ -228,6 +219,7 @@ function getZ(params::Array{Float64,1}, dataset::Dataset, siteCats::Int=3, lambd
     grammar = KH99()
     unpairedlogprobs = computeunpairedlikelihoods(dataset, currentparams)
     maxbasepairdistance = 1000000
+    println("C. maxbasepairdistance: ", maxbasepairdistance)
     pairedlogprobs, ret = coevolutionall(dataset,currentparams,true,false,true,maxbasepairdistance,usecuda)
     #elapsed = toc()
     #println("P1\t", elapsed)
@@ -243,7 +235,7 @@ end
 maxll = -1e20
 maxparams = []
 optiter = 0
-function modellikelihood(params::Array{Float64,1}, dataset::Dataset, paired::Array{Int,1}, siteCats::Int=3, lambdaCats::Int=5, fixGU::Bool=false, fixGCAU::Bool=false, integratestructure::Bool=true, unpairedmodel::Bool=false, maxfile=nothing, usecuda::Bool=true)
+function modellikelihood(params::Array{Float64,1}, dataset::Dataset, paired::Array{Int,1}, siteCats::Int=3, lambdaCats::Int=5, fixGU::Bool=false, fixGCAU::Bool=false, integratestructure::Bool=true, unpairedmodel::Bool=false, maxfile=nothing, usecuda::Bool=true; maxbasepairdistance::Int=1000000)
     global maxll
     global maxparams
     global optiter
@@ -253,12 +245,16 @@ function modellikelihood(params::Array{Float64,1}, dataset::Dataset, paired::Arr
     currentparams = getparams(params,dataset,siteCats,lambdaCats,0,fixGU,fixGCAU)
 
     if fixGU
+        currentparams.lambdaGT = 1.0
         currentparams.lambdaratesGT = zeros(Float64, length(currentparams.lambdaratesGT))
     end
     if fixGCAU
         currentparams.lambdaratesGC = currentparams.lambdaratesAT
     end
-    if unpairedmodel
+    if unpairedmodel        
+        currentparams.lambdaGC = 1.0
+        currentparams.lambdaAT = 1.0
+        currentparams.lambdaGT = 1.0
         currentparams.lambdaratesGC = zeros(Float64, length(currentparams.lambdaratesGT))
         currentparams.lambdaratesAT = zeros(Float64, length(currentparams.lambdaratesGT))
         currentparams.lambdaratesGT = zeros(Float64, length(currentparams.lambdaratesGT))
@@ -269,15 +265,18 @@ function modellikelihood(params::Array{Float64,1}, dataset::Dataset, paired::Arr
             grammar = KH99()
             unpairedlogprobs = computeunpairedlikelihoods(dataset, currentparams)
             #tic()
-            maxbasepairdistance = 1000000
+            #maxbasepairdistance = 1000000
+            #println("E. maxbasepairdistance: ", maxbasepairdistance)
             pairedlogprobs, ret = coevolutionall(dataset,currentparams,true,false,true,maxbasepairdistance,usecuda)
             maskgapped!(pairedlogprobs,dataset.gapfrequency,0.5,-Inf)
             ll = computeinsideKH99(unpairedlogprobs, pairedlogprobs, 1.0, true, usecuda)
             #elapsed = toc();
             #println("Iteration ", optiter, ", elapsed: ", elapsed)
-            println("Iteration ", optiter)
+            #println("Iteration ", optiter)
+            #println("A",ll)
         else
-            maxbasepairdistance = 1000000
+            #maxbasepairdistance = 1000000
+            #println("F. maxbasepairdistance: ", maxbasepairdistance)
             ll = computetotallikelihood(MersenneTwister(5043820111),dataset, currentparams, paired,false,true,false,1.0,false, maxbasepairdistance, usecuda)
         end
 
@@ -288,11 +287,19 @@ function modellikelihood(params::Array{Float64,1}, dataset::Dataset, paired::Arr
         end
 
         savemaximum(ll, params, maxfile)
+
+        fout = open(string(maxfile,".list"),"a")
+        println(fout, ll,"\t",getparamsvector(currentparams))
+        close(fout)
     catch e
         println("Exception")
-        println(catch_backtrace())
         println(e)
-        return ll
+        println(stacktrace(catch_backtrace()))
+        if occursin("CuError", string(e))
+            exit()
+        end
+        return -1e20
+        #return ll
     end
 
     if isnan(ll) || isinf(ll)
@@ -305,15 +312,15 @@ function modellikelihood(params::Array{Float64,1}, dataset::Dataset, paired::Arr
     if ll > maxll
         maxll = ll
         maxparams = params
-
         ret = "Maximum\t"
         ret = string(ret, maxll, "\t")
         ret = string(ret, @sprintf("%d", optiter), "\t")
-        for x in maxparams
+        for x in params
             ret = string(ret, @sprintf("%0.2f", x), "\t")
         end
         println(ret)
     end
+
     return ll
 end
 
@@ -439,12 +446,20 @@ function computeimportanceratio(currentlikelihoods, params::Array{Float64,1}, da
     return llsum
 end
 
+function parsejsonfile(infile)
+    jsondict = Dict()
+    open(infile,"r") do file
+        jsondict = JSON.parse(file)
+    end
+    return jsondict
+end
+
 function savemaximum(Z::Float64, maxparams::Array{Float64,1}, maxfile, override::Bool=false, statuslabel::String="")
     maximumZ  = -Inf
     maximumparams = maxparams
 
     if isfile(maxfile)
-        jsondict = JSON.parsefile(maxfile)
+        jsondict = parsejsonfile(maxfile)
         if Z > jsondict["Z"] || override
             if Z > maximumZ  || override
                 maximumZ = Z
@@ -509,6 +524,7 @@ function optimizesamplelikelihood(rng::AbstractRNG, initialparams::Array{Float64
     grammar = KH99()
     unpairedlogprobs = computeunpairedlikelihoods(dataset, currentparams)
     #tic()
+    println("F. maxbasepairdistance: ", maxbasepairdistance)
     pairedlogprobs, ret = coevolutionall(dataset,currentparams,true,false,true,maxbasepairdistance, usecuda)
     #println("unpairedlogprobs",unpairedlogprobs)
     #println("pairedlogprobs",pairedlogprobs)
@@ -608,7 +624,7 @@ function optimizesamplelikelihood(rng::AbstractRNG, initialparams::Array{Float64
     return minx, initialparams, Z + logpdf(lambdaweightprior, minx[15])
 end
 
-function mcem(dataset::Dataset, siteCats::Int=3, lambdaCats::Int=5, fixGU::Bool=false, fixGCAU::Bool=false, unpairedmodel::Bool=false,maxoptiter::Int=1000,samplesperiter::Int=50,maxbasepairdistance::Int=500, initparams::ModelParameters=nothing, maxfile=nothing, usecuda::Bool=true)
+function mcem(dataset::Dataset, siteCats::Int=3, lambdaCats::Int=5, fixGU::Bool=false, fixGCAU::Bool=false, unpairedmodel::Bool=false,maxmcemiter::Int=150,samplesperiter::Int=50,maxbasepairdistance::Int=500, initparams::ModelParameters=nothing, maxfile=nothing, usecuda::Bool=true)
     global maxll
     maxll = -1e20
     fixLambdaWeight = false
@@ -645,8 +661,9 @@ rng = MersenneTwister(757494371317)
 maxZ = -1e20
 maxparams = nothing
 noimprovement = 0
+maxoptiter = 100
 for i=1:maxoptiter
-    initialparams, params, Z = optimizesamplelikelihood(rng, initialparams, dataset, siteCats, lambdaCats, fixGU, fixGCAU, fixLambdaWeight, unpairedmodel, 150,samplesperiter,maxbasepairdistance, maxfile, usecuda)
+    initialparams, params, Z = optimizesamplelikelihood(rng, initialparams, dataset, siteCats, lambdaCats, fixGU, fixGCAU, fixLambdaWeight, unpairedmodel, maxmcemiter,samplesperiter,maxbasepairdistance, maxfile, usecuda)
     if Z > maxZ
         maxZ = Z
         maxparams = copy(params)
@@ -725,7 +742,7 @@ function unmaskarraysel(arr::Array{Float64,1}, sel::Array{Int,1}, len::Int)
     return outarr
 end
 
-function optimizemodel(dataset::Dataset, pairedsites::Array{Int,1}, siteCats::Int=3, lambdaCats::Int=5, fixGU::Bool=false, fixGCAU::Bool=false, integratestructure::Bool=true, unpairedmodel::Bool=false,maxoptiter::Int=1000, initparams::ModelParameters=nothing, maxfile=nothing, usecuda::Bool=true)
+function optimizemodel(dataset::Dataset, pairedsites::Array{Int,1}, siteCats::Int=3, lambdaCats::Int=5, fixGU::Bool=false, fixGCAU::Bool=false, integratestructure::Bool=true, unpairedmodel::Bool=false,maxoptiter::Int=1000, initparams::ModelParameters=nothing, maxfile=nothing, usecuda::Bool=true; maxbasepairdistance::Int=1000000)
     global optiter
     optiter = 0
     global maxll
@@ -751,7 +768,7 @@ function optimizemodel(dataset::Dataset, pairedsites::Array{Int,1}, siteCats::In
     if unpairedmodel
         fill!(paired, 0)
     end
-    localObjectiveFunction = ((param, grad) -> modellikelihood(param, dataset, paired, siteCats, lambdaCats, fixGU, fixGCAU, integratestructure, unpairedmodel, maxfile, usecuda))
+    localObjectiveFunction = ((param, grad) -> modellikelihood(param, dataset, paired, siteCats, lambdaCats, fixGU, fixGCAU, integratestructure, unpairedmodel, maxfile, usecuda, maxbasepairdistance=maxbasepairdistance))
     opt = Opt(:LN_NELDERMEAD, 20)
     #opt = Opt(:LN_COBYLA, 20)
 
@@ -910,16 +927,20 @@ function processmax(outputprefix, alignmentfile, maxfile::AbstractString, datase
 
     if !unpaired
         unpairedlogprobs = computeunpairedlikelihoods(dataset, params)
-        pairedlogprobs, ret = coevolutionall(dataset,params,true,false,true,maxbasepairdistance,usecuda)
+        #pairedlogprobs, ret = coevolutionall(dataset,params,true,false,true,maxbasepairdistance,usecuda)
+        println("G. maxbasepairdistance: ", maxbasepairdistance)
+        pairedlogprobs, ret = coevolutionall(dataset,params,true,true,true,maxbasepairdistance,usecuda)
         inside = computeinsideKH99(unpairedlogprobs, pairedlogprobs, 1.0,false,usecuda)
         outside = computeoutsideKH99(inside,unpairedlogprobs, pairedlogprobs, usecuda)
         unpairedposteriorprobs,pairedposteriorprobs = computebasepairprobs(inside, outside, unpairedlogprobs, pairedlogprobs, KH99())
         fout = open(string(maxfile, ".posteriorunpaired"),"w")
         println(fout,unpairedposteriorprobs)
         close(fout)
+        #=
         fout = open(string(maxfile, ".posteriorpaired"),"w")
         println(fout,printmatrix(pairedposteriorprobs))
         close(fout)
+        =#
 
         ematrix = nothing
         smatrix = nothing
@@ -929,7 +950,7 @@ function processmax(outputprefix, alignmentfile, maxfile::AbstractString, datase
         close(fout)
         writectfile(consensus, repeat("N", length(consensus)), string(maxfile, ".consensus.ct"))
 
-        pairedlogprobs, ret = coevolutionall(dataset,params,true,true,true,maxbasepairdistance,usecuda)
+        #pairedlogprobs, ret = coevolutionall(dataset,params,true,true,true,maxbasepairdistance,usecuda)
 
         museparams = getmusespecificparamsarray(params)
         posteriorcoevolving = zeros(Float64, dataset.numcols, dataset.numcols)
@@ -952,29 +973,36 @@ function processmax(outputprefix, alignmentfile, maxfile::AbstractString, datase
                 posteriorcoevolving[j,i] = posteriorcoevolving[i,j]
             end
         end
-        fout = open(string(maxfile, ".consensus.bp"),"w")
+        fout = open(string(maxfile, ".consensus.csv"),"w")
+        println(fout,"Position i,Paired with j,Unpaired probability,Pairing probability p(i^j),Post prob eta>0,Bayes fact eta>0,E[eta|i^j],E[eta],max(p[i,*])")
         for i=1:length(consensus)
-            bp = "-\t-\t-\t-"
+            bp = "-,-,-,-,-,"
             if consensus[i] > 0
                 #println(pairedposteriorprobs[i,consensus[i]])
                 #println(posteriorcoevolving[i,consensus[i]])
                 #println(bayesfactorcoevolving[i,consensus[i]])
                 #println(posteriormeanlambda[i,consensus[i]])
-                bp = string(@sprintf("%.4f", pairedposteriorprobs[i,consensus[i]]), "\t", @sprintf("%.4f", posteriorcoevolving[i,consensus[i]]), "\t", @sprintf("%.4e", bayesfactorcoevolving[i,consensus[i]]), "\t", @sprintf("%.4f", posteriormeanlambda[i,consensus[i]]))
+                bp = string(@sprintf("%.4f", pairedposteriorprobs[i,consensus[i]]), ",", @sprintf("%.4f", posteriorcoevolving[i,consensus[i]]), ",", @sprintf("%.4e", bayesfactorcoevolving[i,consensus[i]]), ",", @sprintf("%.4f", posteriormeanlambda[i,consensus[i]]), ",", @sprintf("%.4f", pairedposteriorprobs[i,consensus[i]]*posteriormeanlambda[i,consensus[i]]))
             end
-            println(fout, i,"\t", consensus[i], "\t", @sprintf("%.4f", unpairedposteriorprobs[i]), "\t", bp, "\t", @sprintf("%.4f", maximum(pairedposteriorprobs[i,:])))
+            println(fout, i,",", consensus[i], ",", @sprintf("%.4f", unpairedposteriorprobs[i]), ",", bp, ",", @sprintf("%.4f", maximum(pairedposteriorprobs[i,:])))
         end
-
+        close(fout)
         lambdameans = zeros(Float64, length(consensus))
+        postprobs = zeros(Float64, length(consensus))
         for i=1:length(consensus)
             if consensus[i] != 0
                 lambdameans[i] = pairedposteriorprobs[i,consensus[i]]*posteriormeanlambda[i,consensus[i]]
+                postprobs[i] = pairedposteriorprobs[i,consensus[i]]
             end
         end
-        #println(lambdameans)
-        rankbycoevolution(outputprefix, alignmentfile, maxfile, consensus, Int[i for i=1:length(consensus)],dataset,lambdameans)
 
-        close(fout)
+        #println(lambdameans)
+        try
+            rankbycoevolution(outputprefix, alignmentfile, maxfile, consensus, Int[i for i=1:length(consensus)],dataset,lambdameans,postprobs)
+        catch
+            println("Error during ranking - structure is probably too short.")
+        end
+
         cutoff = 0.001
         fout = open(string(maxfile,"_", cutoff, ".csv"),"w")
         println(fout, "\"i\",\"j\",\"paired(i)\",\"paired(j)\",\"paired(i,j)\",\"p(lambda>0)\",\"meanlambda\",\"bayesfactor(lambda>0)\"")
@@ -987,7 +1015,7 @@ function processmax(outputprefix, alignmentfile, maxfile::AbstractString, datase
         end
         close(fout)
 
-
+        #=
         fout = open(string(maxfile, ".posteriorcoevolving"),"w")
         println(fout,printmatrix(posteriorcoevolving))
         close(fout)
@@ -996,7 +1024,7 @@ function processmax(outputprefix, alignmentfile, maxfile::AbstractString, datase
         close(fout)
         fout = open(string(maxfile, ".bayesfactorcoevolving"),"w")
         println(fout,printmatrix(bayesfactorcoevolving))
-        close(fout)
+        close(fout)=#
     end
 end
 
@@ -1029,12 +1057,13 @@ function processmax(outputprefix, alignmentfile, maxfile::AbstractString, datase
     fout = open(string(maxfile, ".mapped.dbn"),"w")
     println(fout, getdotbracketstring(paired))
     close(fout)
-    rankbycoevolution(outputprefix, alignmentfile, maxfile, paired, mapping,dataset,lambdameans)
+    rankbycoevolution(outputprefix, alignmentfile, maxfile, paired, mapping,dataset,lambdameans, postprobs)
     return lambdameans,postprobs
 end
 
 function computemaxstructure(dataset::Dataset, params::ModelParameters, maxbasepairdistance::Int=500, usecuda::Bool=true, deletegaps::Bool=false)
     unpairedlogprobs = computeunpairedlikelihoods(dataset, params)
+    println("A. maxbasepairdistance: ", maxbasepairdistance)
     pairedlogprobs, ret = coevolutionall(dataset,params,true,true,true,maxbasepairdistance,usecuda)
 
     if deletegaps
@@ -1094,7 +1123,6 @@ function likelihoodratiotests(outputprefix)
         fout = open(csvfile, "w")
         write(fout, printaictablescsv(String[outputprefix]))
         close(fout)
-        exit()
 
         template = read(open(joinpath(@__DIR__,"likelihoodratiotests_template.tex"),"r"), String)
 
@@ -1174,22 +1202,82 @@ function main()
     end
     alignmentfile = cleandataset(alignmentfilein, string(outputprefix,".fas.norm"))
 
-    likelihoodratiotests(outputprefix)
+    if parsed_args["tree"] == nothing
+        treefile = "$outputprefix.nwk"
+        newickstring, treepath = Binaries.fasttreegtr(alignmentfile)
+        fout = open(treefile,"w")
+        println(fout, newickstring)
+        close(fout)
+    else
+        treefile = parsed_args["tree"]
+    end
+    grammar = KH99()
+    dataset = Dataset(getalignmentfromfastaandnewick(alignmentfile,treefile))
+    
+    #=
+    println("Numcols = ", dataset.numcols)
+    countbasepairs = 0
+    totalbasepairs = 0
+    for x=1:dataset.numcols
+        println(x)
+        for y=x+1:dataset.numcols
+            if hascanonicalbasepair(dataset, x, y)
+                countbasepairs += 1
+            end
+            totalbasepairs += 1
+        end
+    end
+    println(countbasepairs,"\t",totalbasepairs,"\t",countbasepairs/totalbasepairs)
+    =#
+
+    maxbasepairprobs = ones(Float64, dataset.numcols, dataset.numcols)
+    if parsed_args["expcanonicalconstraints"] || parsed_args["expcanonicalrnafold"] != -1000.0        
+        if parsed_args["expcanonicalrnafold"] != -1000.0
+            foldtemp  = parsed_args["expcanonicalrnafold"]
+            maxbasepairprobs = zeros(Float64, dataset.numcols, dataset.numcols)
+            for seq in dataset.sequences
+                mapping = zeros(Int, length(seq))
+                z = 1
+                for i=1:length(seq)
+                    if seq[i] != '-'
+                        mapping[i] = z
+                        z += 1
+                    end
+                end
+                revmapping = CommonUtils.getrevmapping(mapping)
+
+                I,J,V = RNABinaries.rnafold_basepairprobs(seq, foldtemp, false, "/media/michael/Sandisk500GB/Dropbox/dev/phylo/src/rnabox/rnafoldcache.h5")
+                for (a,b,prob) in zip(I,J,V)
+                    x = revmapping[a]
+                    y = revmapping[b]
+                    maxbasepairprobs[x,y] = max(maxbasepairprobs[x,y], prob)
+                    maxbasepairprobs[y,x] = maxbasepairprobs[x,y]
+                end
+            end
+        end
+
+        countbasepairs = 0
+        totalbasepairs = 0
+        for x=1:dataset.numcols
+            for y=x+1:dataset.numcols
+                if parsed_args["expcanonicalconstraints"] && !hascanonicalbasepair(dataset, x, y)
+                    maxbasepairprobs[x,y] = 0.0
+                    maxbasepairprobs[y,x] = 0.0
+                elseif parsed_args["expcanonicalrnafold"] != -1000.0 && maxbasepairprobs[x,y] < 1e-5
+                    maxbasepairprobs[x,y] = 0.0
+                    maxbasepairprobs[y,x] = 0.0
+                else
+                    countbasepairs += 1
+                end
+                totalbasepairs += 1
+            end
+        end        
+        println(countbasepairs,"\t",totalbasepairs,"\t",countbasepairs/totalbasepairs)
+    end
+    dataset.maxbasepairprobs = sparse(maxbasepairprobs)
 
     for run_args in run_args_list
         mcmclogfile = string(outputprefix,".log")
-        if run_args["tree"] == nothing
-            treefile = "$outputprefix.nwk"
-            newickstring, treepath = Binaries.fasttreegtr(alignmentfile)
-            fout = open(treefile,"w")
-            println(fout, newickstring)
-            close(fout)
-        else
-            treefile = run_args["tree"]
-        end
-        grammar = KH99()
-        dataset = Dataset(getalignmentfromfastaandnewick(alignmentfile,treefile))
-
 
         mode = MODE_IO_SAMPLE
         #mode = MODE_VIENNA_SAMPLE
@@ -1238,13 +1326,13 @@ function main()
         maxfileold = string(outputprefixold,".max")
         maxfileunpaired = string(outputprefix, ".max.unpaired")
         if isfile(maxfile)
-            jsondict = JSON.parsefile(maxfile)
+            jsondict = parsejsonfile(maxfile)
             initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
         elseif isfile(maxfileold)
-            jsondict = JSON.parsefile(maxfileold)
+            jsondict = parsejsonfile(maxfileold)
             initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
         elseif isfile(maxfileunpaired)
-            jsondict = JSON.parsefile(maxfileunpaired)
+            jsondict = parsejsonfile(maxfileunpaired)
             initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
             #initialparams[10] = 5.0/10.0
             initialparams[10] = 5.0
@@ -1261,7 +1349,7 @@ function main()
         if run_args["fixgcau"] && run_args["fixgu"]
             maxfile = string(outputprefix, ".fixgcaugu.max")
             if isfile(maxfile)
-                jsondict = JSON.parsefile(maxfile)
+                jsondict = parsejsonfile(maxfile)
                 initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
             end
             currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
@@ -1269,7 +1357,7 @@ function main()
         elseif run_args["fixgcau"]
             maxfile = string(outputprefix, ".fixgcau.max")
             if isfile(maxfile)
-                jsondict = JSON.parsefile(maxfile)
+                jsondict = parsejsonfile(maxfile)
                 initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
             end
             currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
@@ -1277,7 +1365,7 @@ function main()
         elseif run_args["fixgu"]
             maxfile = string(outputprefix, ".fixgu.max")
             if isfile(maxfile)
-                jsondict = JSON.parsefile(maxfile)
+                jsondict = parsejsonfile(maxfile)
                 initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
             end
             currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
@@ -1289,7 +1377,7 @@ function main()
         if run_args["unpaired"]
             maxfile = string(outputprefix, ".max.unpaired")
             if isfile(maxfile)
-                jsondict = JSON.parsefile(maxfile)
+                jsondict = parsejsonfile(maxfile)
                 initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
             end
             currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
@@ -1361,17 +1449,16 @@ function main()
             end
 
             if integratestructure
-                maxoptiter = run_args["maxmcemiter"]
                 samplesperiter = run_args["samplesperiter"]
                 if samplesperiter > 0
                     println("Using Monte Carlo EM")
-                    currentparams = mcem(dataset, siteCats, lambdaCats, fixGU, fixGCAU, unpairedmodel,maxoptiter,samplesperiter,maxbasepairdistance,currentparams, maxfile, usecuda)
+                    currentparams = mcem(dataset, siteCats, lambdaCats, fixGU, fixGCAU, unpairedmodel,run_args["maxmcemiter"],samplesperiter,maxbasepairdistance,currentparams, maxfile, usecuda)
                 else
-                    currentparams = optimizemodel(dataset, (run_args["structure"] == nothing ? zeros(Int,dataset.numcols) : pairedsites), siteCats, lambdaCats, fixGU,fixGCAU, true, unpairedmodel,2000,currentparams, maxfile, usecuda)
+                    currentparams = optimizemodel(dataset, (run_args["structure"] == nothing ? zeros(Int,dataset.numcols) : pairedsites), siteCats, lambdaCats, fixGU,fixGCAU, true, unpairedmodel,2000,currentparams, maxfile, usecuda, maxbasepairdistance=maxbasepairdistance)
                 end
             else
                 maxoptiter = 2000
-                currentparams = optimizemodel(dataset,  (run_args["structure"] == nothing ? zeros(Int,dataset.numcols) : pairedsites), siteCats,lambdaCats,fixGU,fixGCAU,integratestructure,unpairedmodel,maxoptiter,currentparams, maxfile, usecuda)
+                currentparams = optimizemodel(dataset,  (run_args["structure"] == nothing ? zeros(Int,dataset.numcols) : pairedsites), siteCats,lambdaCats,fixGU,fixGCAU,integratestructure,unpairedmodel,maxoptiter,currentparams, maxfile, usecuda, maxbasepairdistance=maxbasepairdistance)
             end
         end
 
@@ -1407,6 +1494,7 @@ function main()
                 unpairedlogprobs = computeunpairedlikelihoods(dataset, currentparams)
                 museparams = getmusespecificparamsarray(currentparams)
                 #tic()
+                println("B. maxbasepairdistance: ", maxbasepairdistance)
                 pairedlogprobs, ret = coevolutionall(dataset,currentparams,true,false,true,maxbasepairdistance,usecuda)
                 maskgapped!(pairedlogprobs,dataset.gapfrequency,0.5,-Inf)
                 inside = computeinsideKH99(unpairedlogprobs, pairedlogprobs, 1.0,false,usecuda)
