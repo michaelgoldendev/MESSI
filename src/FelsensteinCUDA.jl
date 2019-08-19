@@ -1,4 +1,8 @@
-using CUDAdrv
+try
+  using CUDAdrv, CUDAnative, CuArrays
+catch
+  println("Unable to use CUDA GPU acceleration.")
+end
 
 function countcomputations(dataset::Dataset, maxbasepairdistance::Int=1000000)
     nodelist = getnodelist(dataset.root)
@@ -208,6 +212,9 @@ xindices = nothing
 yindices = nothing
 leftrightindices = nothing
 function felsensteincuda(dataset::Dataset, params::ModelParameters, museparams::Array{MuseSpecificParameters,1}, maxbasepairdistance::Int=1000000, keepmuseconditionals::Bool=false)
+    println("FELSENSTEIN START")
+    #CuArrays.pool_status()
+    #return zeros(Float64,numcols,numcols), Array{Float64,2}[]
     #println("maxbasepairdistance: ", maxbasepairdistance)
     alphabet::Int32 = Int32(16)
     nodelist = getnodelist(dataset.root)
@@ -256,7 +263,7 @@ function felsensteincuda(dataset::Dataset, params::ModelParameters, museparams::
     d_museconditionals = nothing
 
     if keepmuseconditionals
-        #println("KEEP CONDITIONALS")
+        println("KEEP CONDITIONALS")
         d_museconditionals = CuArray{Float32,1}[CuArray(zeros(Float32, length(xindices[1]))) for musespecificparams in museparams]
     end
 
@@ -320,6 +327,9 @@ function felsensteincuda(dataset::Dataset, params::ModelParameters, museparams::
                             d_x = CuArray(convert(Array{Int32,1}, xindices[nodeindex].-1))
                             d_y = CuArray(convert(Array{Int32,1}, yindices[nodeindex].-1))
                             cudacall(cudafelsensteinleaves, (Int32, Int32, CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat},), Int32(dataset.numcols), Int32(datalen), d_x, d_y, d_data, store[nodeindex], blocks=div(datalen+blocksize-1, blocksize), threads=blocksize)
+                            CuArrays.finalize(d_x)
+                            CuArrays.finalize(d_y)
+                            CuArrays.finalize(d_data)
                             #Mem.free(d_x)
                             #Mem.free(d_y)
                         end
@@ -351,7 +361,6 @@ function felsensteincuda(dataset::Dataset, params::ModelParameters, museparams::
                             if haskey(store,nodeindex) && datalen*(alphabet+1) < keeparr
                                 d_res = store[nodeindex]
                             else
-                                #println("Line 342 size: ", datalen*(alphabet+1))
                                 d_res = CuArray(zeros(Float32, datalen*(alphabet+1))) #Mem.alloc(Float32, datalen*(alphabet+1))
                             end
 
@@ -366,12 +375,15 @@ function felsensteincuda(dataset::Dataset, params::ModelParameters, museparams::
                                 if nodelengths[leftchildindex]*(alphabet+1) >= keeparr
                                     #Mem.free(d_left)
                                     delete!(store, leftchildindex)
+                                    CuArrays.finalize(d_left)
+                                   
                                 end
                             end
                             if !isleafnode(node.children[2])
                                 if nodelengths[rightchildindex]*(alphabet+1) >= keeparr
                                     #Mem.free(d_right)
                                     delete!(store, rightchildindex)
+                                    CuArrays.finalize(d_right)
                                 end
                             end
 
@@ -402,6 +414,14 @@ function felsensteincuda(dataset::Dataset, params::ModelParameters, museparams::
                     logw2 = log(params.siteWeights[siteCat1]) + log(params.siteWeights[siteCat2]) + musespecificparams.logprob
                     cudacall(cudalogsumexparr, (Int32,Float32,CuPtr{Cfloat},Float32,CuPtr{Cfloat}), Int32(datalen), Float32(logw1), d_finallogliks, Float32(logw2), d_logliks, blocks=div(datalen+blocksize-1, blocksize), threads=blocksize)
                 end
+                CuArrays.finalize(d_logliks)
+                CuArrays.finalize(d_freqs)
+                CuArrays.finalize(d_transprobs)
+                if haskey(store,1)
+                    root = store[1]               
+                    delete!(store, 1)
+                    CuArrays.finalize(root)
+                end
                 #Mem.free(d_logliks)
                 #Mem.free(store[1])
                 #delete!(store, 1)
@@ -416,7 +436,7 @@ function felsensteincuda(dataset::Dataset, params::ModelParameters, museparams::
     #println("D1")
     #finallogliks = Array(d_finallogliks, length(xindices[1]))
     finallogliks = Array(d_finallogliks)
-    #println("D2")
+    CuArrays.finalize(d_finallogliks)
     mat = ones(Float64, dataset.numcols, dataset.numcols)*-Inf
     for x=1:dataset.numcols
         yend = min(x+maxbasepairdistance,dataset.numcols)
@@ -450,18 +470,32 @@ function felsensteincuda(dataset::Dataset, params::ModelParameters, museparams::
                     end
                 end
             end
+            CuArrays.finalize(d_museconditionals[z])
             #Mem.free(d_museconditionals[z])
             push!(ret, conditionalmat)
         end
     end
+    
     #Mem.free(d_finallogliks)
     #println("D4")
 
-    keylist = Int[k for k in keys(store)]
-    for k in keylist
-        ##Mem.free(store[k])
-        #delete!(store, k)
+    for key in keys(leftrightindicescuda)
+        left,right = leftrightindicescuda[key]
+        delete!(leftrightindicescuda, key)
+        CuArrays.finalize(left)
+        CuArrays.finalize(right)
     end
+    finalize(leftrightindicescuda)
+
+    for k in keys(store)
+        tempvalue = store[k] 
+        delete!(store, k)
+        CuArrays.finalize(tempvalue)
+        #CuArrays.CuArrays.finalize(store[k])
+        ##Mem.free(store[k])
+    end
+    finalize(store)
+
     #println("D5")
 
     #println("End  ", Mem.used(),"\t",Mem.total())
@@ -471,7 +505,8 @@ function felsensteincuda(dataset::Dataset, params::ModelParameters, museparams::
     #unsafe_reset!(dev)
     #elapsed = toc()
     #println("CUDA ",elapsed)
-
+    println("FELSENSTEIN END")
+    #CuArrays.pool_status()
     return mat, ret
 end
 
@@ -579,7 +614,8 @@ function felsensteinposteriorsiterateconditionalscuda(singleprobs::Array{Float64
                             d_x = CuArray(convert(Array{Int32,1}, xindices[nodeindex].-1))
                             d_y = CuArray(convert(Array{Int32,1}, yindices[nodeindex].-1))
                             cudacall(cudafelsensteinleaves, (Int32, Int32, CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat},), Int32(dataset.numcols), Int32(datalen), d_x, d_y, d_data, store[nodeindex],  blocks=div(datalen+blocksize-1, blocksize), threads=blocksize)
-                            #Mem.free(d_data)
+                            ##Mem.free(d_data)
+                            CuArrays.finalize(d_data)
                         end
                     else
                         leftchildindex = node.children[1].nodeindex
@@ -621,12 +657,14 @@ function felsensteinposteriorsiterateconditionalscuda(singleprobs::Array{Float64
                                 if length(xindices[leftchildindex])*(alphabet+1) >= keeparr
                                     #Mem.free(d_left)
                                     delete!(store, leftchildindex)
+                                    CuArrays.finalize(d_left)
                                 end
                             end
                             if !isleafnode(node.children[2])
                                 if length(xindices[rightchildindex])*(alphabet+1) >= keeparr
                                     #Mem.free(d_right)
                                     delete!(store, rightchildindex)
+                                    CuArrays.finalize(d_right)
                                 end
                             end
 
@@ -640,6 +678,7 @@ function felsensteinposteriorsiterateconditionalscuda(singleprobs::Array{Float64
                 #Mem.free(store[1])
                 catlogprob = log(params.siteWeights[siteCat1]) + log(params.siteWeights[siteCat2]) + musespecificparams.logprob
                 condliks = Array(d_logliks)
+                CuArrays.finalize(d_logliks)
                 #Mem.free(d_logliks)
                 for x=1:dataset.numcols
                     yend = min(x+maxbasepairdistance,dataset.numcols)
@@ -654,6 +693,8 @@ function felsensteinposteriorsiterateconditionalscuda(singleprobs::Array{Float64
                         end
                     end
                 end
+                CuArrays.finalize(d_freqs)
+                CuArrays.finalize(d_transprobs)
                 #Mem.free(d_freqs)
                 #Mem.free(d_transprobs)
                 paramindex += 1
@@ -777,6 +818,9 @@ while length(stack) > 0
             d_x = CuArray(convert(Array{Int32,1}, xindices[nodeindex].-1))
             d_y = CuArray(convert(Array{Int32,1}, yindices[nodeindex].-1))
             cudacall(cudafelsensteinleaves, (Int32, Int32, Int32, CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}, CuPtr{Cfloat}), Int32(dataset.numcols), Int32(numratecats), Int32(numpairs), d_x, d_y, d_data, store[nodeindex], blocks=div(datalen+blocksize-1, blocksize), threads=blocksize)
+            CuArrays.finalize(d_data)
+            CuArrays.finalize(d_x)
+            CuArrays.finalize(d_y)
             #Mem.free(d_data)
             #Mem.free(d_x)
             #Mem.free(d_y)
@@ -834,6 +878,10 @@ d_finallogliks =  CuArray(numpairs)
 cudacall(cudasumcats, (Cint,Cint,CuPtr{Cfloat},CuPtr{Cfloat}, CuPtr{Cfloat}), Cint(numratecats), Int32(numpairs), d_paramlogweights, d_logliks, d_finallogliks, blocks=div(numpairs+blocksize-1, blocksize), threads=blocksize)
 
 finallogliks = Array(d_finallogliks)
+CuArrays.finalize(d_finallogliks)
+CuArrays.finalize(d_logliks)
+CuArrays.finalize(store[1])
+CuArrays.finalize(d_paramlogweights)
 #Mem.free(d_finallogliks)
 #Mem.free(d_logliks)
 #Mem.free(store[1])

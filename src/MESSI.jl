@@ -26,6 +26,7 @@ using Binaries
 
 include("FARCE.jl")
 include("MCMC.jl")
+include("Simulations.jl")
 using DataFrames
 using NLopt
 include("Covariation.jl")
@@ -41,6 +42,8 @@ using Printf
 using CommonUtils
 using RNABinaries
 using SparseArrays
+using BayesianOptimization
+using GaussianProcesses
 
 include("StructurePlotsAndTables.jl")
 
@@ -76,6 +79,10 @@ function parse_commandline()
         help = ""
         arg_type = Int
         default = 100000000
+        "--gapcutoff"
+        help = ""
+        arg_type = Float64
+        default = 1.0
         "--M"
         help = ""
         arg_type = Float64
@@ -89,6 +96,10 @@ function parse_commandline()
         "--mcmc"
         help = "Perform Bayesian inference using MCMC instead of the default Maximum Likelihood inference"
         action = :store_true
+        "--simulate"
+        help = ""
+        arg_type = Int
+        default = 0
         #=
         "--optimize"
         help = ""
@@ -98,6 +109,10 @@ function parse_commandline()
         help = ""
         arg_type = Int
         default = 0
+        "--maxoptiter"
+        help = ""
+        arg_type = Int
+        default = 2000
         "--maxmcemiter"
         help = ""
         arg_type = Int
@@ -207,7 +222,7 @@ function mapstructure(dataset, fastafile, ctfile)
     return mappedsequence,mappedpairedsites, mapping, revmapping
 end
 
-function getZ(params::Array{Float64,1}, dataset::Dataset, siteCats::Int=3, lambdaCats::Int=5, usecuda::Bool=true,unpaired::Bool=true)
+function getZ(params::Array{Float64,1}, dataset::Dataset, siteCats::Int=3, lambdaCats::Int=5, usecuda::Bool=true,unpaired::Bool=true;gapcutoff::Float64=1.0)
     #tic()
     currentparams = getparams(params,dataset,siteCats,lambdaCats,0)
     if unpaired
@@ -223,7 +238,7 @@ function getZ(params::Array{Float64,1}, dataset::Dataset, siteCats::Int=3, lambd
     pairedlogprobs, ret = coevolutionall(dataset,currentparams,true,false,true,maxbasepairdistance,usecuda)
     #elapsed = toc()
     #println("P1\t", elapsed)
-    maskgapped!(pairedlogprobs,dataset.gapfrequency,0.5,-Inf)
+    maskgapped!(pairedlogprobs,dataset.gapfrequency,gapcutoff,-Inf)
     #tic()
     ll = computeinsideKH99(unpairedlogprobs, pairedlogprobs, 1.0,true,usecuda)
     #elapsed = toc()
@@ -235,28 +250,48 @@ end
 maxll = -1e20
 maxparams = []
 optiter = 0
-function modellikelihood(params::Array{Float64,1}, dataset::Dataset, paired::Array{Int,1}, siteCats::Int=3, lambdaCats::Int=5, fixGU::Bool=false, fixGCAU::Bool=false, integratestructure::Bool=true, unpairedmodel::Bool=false, maxfile=nothing, usecuda::Bool=true; maxbasepairdistance::Int=1000000)
+function modellikelihood(inparams::Array{Float64,1}, dataset::Dataset, paired::Array{Int,1}, siteCats::Int=3, lambdaCats::Int=5, fixGU::Bool=false, fixGCAU::Bool=false, integratestructure::Bool=true, unpairedmodel::Bool=false, maxfile=nothing, usecuda::Bool=true; maxbasepairdistance::Int=1000000,gapcutoff=1.0)
     global maxll
     global maxparams
     global optiter
     optiter += 1
 
     ll = -1e20
+
+    params = copy(inparams)
+    #println(optiter,"\t",params)
+    #=
+    if unpairedmodel      
+        params[1] = 1.0
+        params[2] = 1.0
+        params[3] = 1.0
+    end
+    if fixGU
+        params[3] = 1.0
+    end=#
+    if fixGCAU
+        params[2] = params[1]
+    end
+  
+    #=
+    lower,upper,dummy = getbounds(fixGU, false, unpairedmodel)
+    for z=1:length(params) # correct any out of bounds values
+      params[z] = max(lower[z], params[z])
+      params[z] = min(upper[z], params[z])
+    end
+    =#
+    if sum(params[12:14]) >= 0.95
+        return -Inf
+    end
     currentparams = getparams(params,dataset,siteCats,lambdaCats,0,fixGU,fixGCAU)
 
-    if fixGU
-        currentparams.lambdaGT = 1.0
-        currentparams.lambdaratesGT = zeros(Float64, length(currentparams.lambdaratesGT))
-    end
-    if fixGCAU
-        currentparams.lambdaratesGC = currentparams.lambdaratesAT
-    end
-    if unpairedmodel        
-        currentparams.lambdaGC = 1.0
-        currentparams.lambdaAT = 1.0
-        currentparams.lambdaGT = 1.0
+    if unpairedmodel
         currentparams.lambdaratesGC = zeros(Float64, length(currentparams.lambdaratesGT))
         currentparams.lambdaratesAT = zeros(Float64, length(currentparams.lambdaratesGT))
+        currentparams.lambdaratesGT = zeros(Float64, length(currentparams.lambdaratesGT))
+    end
+
+    if fixGU
         currentparams.lambdaratesGT = zeros(Float64, length(currentparams.lambdaratesGT))
     end
 
@@ -268,7 +303,7 @@ function modellikelihood(params::Array{Float64,1}, dataset::Dataset, paired::Arr
             #maxbasepairdistance = 1000000
             #println("E. maxbasepairdistance: ", maxbasepairdistance)
             pairedlogprobs, ret = coevolutionall(dataset,currentparams,true,false,true,maxbasepairdistance,usecuda)
-            maskgapped!(pairedlogprobs,dataset.gapfrequency,0.5,-Inf)
+            maskgapped!(pairedlogprobs,dataset.gapfrequency,gapcutoff,-Inf)
             ll = computeinsideKH99(unpairedlogprobs, pairedlogprobs, 1.0, true, usecuda)
             #elapsed = toc();
             #println("Iteration ", optiter, ", elapsed: ", elapsed)
@@ -280,16 +315,16 @@ function modellikelihood(params::Array{Float64,1}, dataset::Dataset, paired::Arr
             ll = computetotallikelihood(MersenneTwister(5043820111),dataset, currentparams, paired,false,true,false,1.0,false, maxbasepairdistance, usecuda)
         end
 
-        if !unpairedmodel
+        if !unpairedmodel && lambdaCats > 1
             ll += logpdf(lambdaweightprior, params[15])
         else
             ll += logpdf(lambdaweightprior, 0.5)
         end
 
         savemaximum(ll, params, maxfile)
-
-        fout = open(string(maxfile,".list"),"a")
-        println(fout, ll,"\t",getparamsvector(currentparams))
+        m = match(r"^([^\.]+)\..+$", basename(maxfile))
+        fout = open(joinpath(dirname(maxfile),string("$(m[1]).cache.list",".sitecats$(siteCats).lambdacats$(lambdaCats)")),"a")
+        println(fout, ll,"\t",params)
         close(fout)
     catch e
         println("Exception")
@@ -305,9 +340,6 @@ function modellikelihood(params::Array{Float64,1}, dataset::Dataset, paired::Arr
     if isnan(ll) || isinf(ll)
         return -1e20
     end
-    if sum(params[12:14]) >= 1.0
-        return -1e20
-    end
 
     if ll > maxll
         maxll = ll
@@ -316,7 +348,7 @@ function modellikelihood(params::Array{Float64,1}, dataset::Dataset, paired::Arr
         ret = string(ret, maxll, "\t")
         ret = string(ret, @sprintf("%d", optiter), "\t")
         for x in params
-            ret = string(ret, @sprintf("%0.2f", x), "\t")
+            ret = string(ret, @sprintf("%0.4f", x), "\t")
         end
         println(ret)
     end
@@ -530,7 +562,7 @@ function optimizesamplelikelihood(rng::AbstractRNG, initialparams::Array{Float64
     #println("pairedlogprobs",pairedlogprobs)
     #elapsed = toc()
     #println("P1\t", elapsed)
-    maskgapped!(pairedlogprobs,dataset.gapfrequency,0.5,-Inf)
+    maskgapped!(pairedlogprobs,dataset.gapfrequency,gapcutoff,-Inf)
 
     #tic()
     inside = computeinsideKH99(unpairedlogprobs, pairedlogprobs, 1.0, false, usecuda)
@@ -615,7 +647,7 @@ function optimizesamplelikelihood(rng::AbstractRNG, initialparams::Array{Float64
     upper[20] = 0.0001
     upper_bounds!(opt, upper)
 
-    xtol_rel!(opt,1e-4)
+    ftol_abs!(opt,1e-3)
     maxeval!(opt, maxoptiter)
     max_objective!(opt, localObjectiveFunction)
 
@@ -742,6 +774,113 @@ function unmaskarraysel(arr::Array{Float64,1}, sel::Array{Int,1}, len::Int)
     return outarr
 end
 
+function sumlessthan(x::Vector, maxsum::Float64=0.95)
+    return x[12] + x[13] + x[14] - maxsum
+end
+
+function optimizemodel(dataset::Dataset, pairedsites::Array{Int,1}, siteCats::Int=3, lambdaCats::Int=5, fixGU::Bool=false, fixGCAU::Bool=false, integratestructure::Bool=true, unpairedmodel::Bool=false, initparams::ModelParameters=nothing, maxfile=nothing, usecuda::Bool=true; maxbasepairdistance::Int=1000000, maxoptiter::Int=2000, gapcutoff::Float64=1.0)
+    global optiter
+    optiter = 0
+    global maxll
+    maxll = -1e20
+    fixLambdaWeight = false
+    paired = copy(pairedsites)
+    if unpairedmodel
+        fill!(paired, 0)
+    end
+    lower,upper,initialparams = getbounds(fixGU, fixLambdaWeight, unpairedmodel,siteCats,lambdaCats, getparamsvector(initparams))    
+    for i=1:length(initialparams)
+        initialparams[i] = min(upper[i], initialparams[i])
+        initialparams[i] = max(lower[i], initialparams[i])
+    end
+
+    println("lower: ", lower)
+    println("upper: ", upper)
+    println("init: ", initialparams)
+    println("unpairedmodel: ", unpairedmodel)
+
+    usebayesopt = false
+    if usebayesopt
+        println("usebayesopt")
+        f = (param -> modellikelihood(param, dataset, paired, siteCats, lambdaCats, fixGU, fixGCAU, integratestructure, unpairedmodel, maxfile, usecuda, maxbasepairdistance=maxbasepairdistance,gapcutoff=gapcutoff))
+
+        model = ElasticGPE(15,
+        mean = MeanConst(0.),         
+        kernel = SEArd(zeros(Float64,15), 2.),
+        capacity = 3000) 
+        set_priors!(model.mean, [Normal(1, 2)])
+
+        initializer_iterations = 100
+        m = match(r"^([^\.]+)\..+$", basename(maxfile))
+        cachefile = joinpath(dirname(maxfile),string("$(m[1]).cache.list",".sitecats$(siteCats).lambdacats$(lambdaCats)"))
+        if isfile(cachefile)
+            x = Array{Float64,1}[]
+            y = Float64[]
+            fin = open(cachefile,"r")
+            for line in readlines(fin)
+                spl = split(line,"\t")
+                if length(spl) == 2
+                    push!(y, parse(Float64, spl[1]))
+                    arrstr = split(spl[2][2:end-1], ", ")
+                    push!(x, Float64[parse(Float64,v) for v in arrstr])
+                end
+            end
+            close(fin)
+
+            append!(model, hcat(x...), y)
+            if length(x) > 5
+                 initializer_iterations = 0
+            end
+        end
+
+        # Optimize the hyperparameters of the GP using maximum a posteriori (MAP) estimates every 50 steps
+        modeloptimizer = MAPGPOptimizer(every = 50,
+        #kernbounds = [[-1, -1, 0], [4, 4, 10]],  # bounds of the 3 parameters GaussianProcesses.get_param_names(model.kernel)
+        maxeval = 40)
+        opt = BOpt(f,
+        model,
+        UpperConfidenceBound(),                # type of acquisition
+        modeloptimizer,                        
+        lower, upper,                  # lowerbounds, upperbounds         
+        repetitions = 1,
+        maxiterations = 500,                   # evaluate at 100 input positions
+        sense = Max,
+        verbosity = Progress,
+        initializer_iterations = initializer_iterations)
+
+        result = boptimize!(opt)
+        println(result)
+        exit()
+    else
+        localObjectiveFunction = ((param, grad) -> modellikelihood(param, dataset, paired, siteCats, lambdaCats, fixGU, fixGCAU, integratestructure, unpairedmodel, maxfile, usecuda, maxbasepairdistance=maxbasepairdistance, gapcutoff=gapcutoff))        
+        opt = Opt(:LN_NELDERMEAD, 15)    
+
+        lower_bounds!(opt, lower)
+        upper_bounds!(opt, upper)
+        maxeval!(opt, maxoptiter)
+        max_objective!(opt, localObjectiveFunction)  
+        xtol_rel!(opt,1e-4) # -4540.125419655316 -4540.125425966072
+        #inequality_constraint!(opt, (x,g) -> sumlessthanone(x), 1e-8)  
+        
+
+        (minf,minx,ret) = optimize(opt, initialparams)
+        println(minf,minx,ret)
+
+        if unpairedmodel
+            if integratestructure
+                ll = getZ(minx, dataset, siteCats, lambdaCats, usecuda, true,gapcutoff=gapcutoff)
+                savemaximum(ll, minx, maxfile, true, string("Optimisation complete: ", ret))
+            else
+                savemaximum(minf, minx, maxfile, true, string("Optimisation complete: ", ret))
+            end
+        end
+    end
+    println("Complete")
+
+    return getparams(minx, dataset, siteCats, lambdaCats,0,fixGU,fixGCAU)
+end
+
+#=
 function optimizemodel(dataset::Dataset, pairedsites::Array{Int,1}, siteCats::Int=3, lambdaCats::Int=5, fixGU::Bool=false, fixGCAU::Bool=false, integratestructure::Bool=true, unpairedmodel::Bool=false,maxoptiter::Int=1000, initparams::ModelParameters=nothing, maxfile=nothing, usecuda::Bool=true; maxbasepairdistance::Int=1000000)
     global optiter
     optiter = 0
@@ -864,7 +1003,7 @@ function optimizemodel(dataset::Dataset, pairedsites::Array{Int,1}, siteCats::In
     println("Complete")
 
     return getparams(minx, dataset, siteCats, lambdaCats,0,fixGU,fixGCAU)
-end
+end=#
 
 function cleandataset(fastafile, outputfile)
     names = []
@@ -1061,7 +1200,7 @@ function processmax(outputprefix, alignmentfile, maxfile::AbstractString, datase
     return lambdameans,postprobs
 end
 
-function computemaxstructure(dataset::Dataset, params::ModelParameters, maxbasepairdistance::Int=500, usecuda::Bool=true, deletegaps::Bool=false)
+function computemaxstructure(dataset::Dataset, params::ModelParameters, maxbasepairdistance::Int=500, usecuda::Bool=true, deletegaps::Bool=false; gapcutoff::Float64=0.5)
     unpairedlogprobs = computeunpairedlikelihoods(dataset, params)
     println("A. maxbasepairdistance: ", maxbasepairdistance)
     pairedlogprobs, ret = coevolutionall(dataset,params,true,true,true,maxbasepairdistance,usecuda)
@@ -1108,7 +1247,7 @@ function computemaxstructure(dataset::Dataset, params::ModelParameters, maxbasep
 
         return paired
     else
-        maskgapped!(pairedlogprobs,dataset.gapfrequency,0.5,-Inf)
+        maskgapped!(pairedlogprobs,dataset.gapfrequency,gapcutoff,-Inf)
         inside = computeinsideKH99(unpairedlogprobs, pairedlogprobs, 1.0,false,usecuda)
         outside = computeoutsideKH99(inside,unpairedlogprobs, pairedlogprobs, usecuda)
         unpairedposteriorprobs,pairedposteriorprobs = computebasepairprobs(inside, outside, unpairedlogprobs, pairedlogprobs, KH99())
@@ -1308,13 +1447,8 @@ function main()
         currentparams.pairedstates = Int[rand(rng,1:lambdaCats) for i=1:dataset.numcols]
 
 
-        initialparams = Float64[2.0,2.0,2.0,1.7487740904105369,4.464074402974858,1.6941505179847807,0.4833108030758708,5.839004646491171,0.7168678100059017,1.0,0.6118067582467858,0.23307618715645315,0.2631203272837885,0.2430685428508905,0.5,1.0,1.0,1.0,1.0,1.0]
+        initialparams = Float64[2.0,2.0,2.0,1.7487740904105369,4.464074402974858,1.6941505179847807,0.4833108030758708,5.839004646491171,0.7168678100059017,1.0,0.6118067582467858,0.23307618715645315,0.2631203272837885,0.2430685428508905,0.5]
         initialparams[10] = 1.0
-        initialparams[16] = 1.0
-        initialparams[17] = 1.0
-        initialparams[18] = 1.0
-        initialparams[19] = 1.0
-        initialparams[20] = 1.0
 
 
         maxbasepairdistance = run_args["maxbasepairdistance"]
@@ -1322,32 +1456,32 @@ function main()
         integratesiterates = true
         integratestructure = false
 
-        maxfile = string(outputprefix, ".max")
-        maxfileold = string(outputprefixold,".max")
-        maxfileunpaired = string(outputprefix, ".max.unpaired")
+        maxfile = string(outputprefix, ".max",".sitecats$(siteCats).lambdacats$(lambdaCats)")
+        maxfilefixgu = string(outputprefix, ".fixgu.max",".sitecats$(siteCats).lambdacats$(lambdaCats)")
+        maxfileold = string(outputprefixold,".max",".sitecats$(siteCats).lambdacats$(lambdaCats)")
+        maxfileunpaired = string(outputprefix, ".max.unpaired",".sitecats$(siteCats)")
         if isfile(maxfile)
             jsondict = parsejsonfile(maxfile)
             initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
         elseif isfile(maxfileold)
             jsondict = parsejsonfile(maxfileold)
             initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
+        elseif isfile(maxfilefixgu)
+            jsondict = parsejsonfile(maxfilefixgu)
+            initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
+            initialparams[3] = min(1.25, (initialparams[2]-1.0)*0.5 + 1.0)
         elseif isfile(maxfileunpaired)
             jsondict = parsejsonfile(maxfileunpaired)
             initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
-            #initialparams[10] = 5.0/10.0
-            initialparams[10] = 5.0
-            initialparams[16] = 0.25
-            #initialparams[17] = 3.0/10.0
-            initialparams[17] = 3.0
-            initialparams[18] = 10.0
-            #initialparams[19] = 1.0/10.0
-            initialparams[19] = 2.0
-            initialparams[20] = 10.0
+            initialparams[1] = 4.0
+            initialparams[2] = 3.0
+            initialparams[3] = 2.0
+            initialparams[15] = 0.25
         end
         currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
-
-        if run_args["fixgcau"] && run_args["fixgu"]
-            maxfile = string(outputprefix, ".fixgcaugu.max")
+      
+       if run_args["fixgcau"] && run_args["fixgu"]
+            maxfile = string(outputprefix, ".fixgcaugu.max",".sitecats$(siteCats).lambdacats$(lambdaCats)")
             if isfile(maxfile)
                 jsondict = parsejsonfile(maxfile)
                 initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
@@ -1355,7 +1489,7 @@ function main()
             currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
             #currentparams.lambdazeroweight = max(currentparams.lambdazeroweight, 0.05)
         elseif run_args["fixgcau"]
-            maxfile = string(outputprefix, ".fixgcau.max")
+            maxfile = string(outputprefix, ".fixgcau.max",".sitecats$(siteCats).lambdacats$(lambdaCats)")
             if isfile(maxfile)
                 jsondict = parsejsonfile(maxfile)
                 initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
@@ -1363,7 +1497,7 @@ function main()
             currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
             #currentparams.lambdazeroweight = max(currentparams.lambdazeroweight, 0.05)
         elseif run_args["fixgu"]
-            maxfile = string(outputprefix, ".fixgu.max")
+            maxfile = string(outputprefix, ".fixgu.max",".sitecats$(siteCats).lambdacats$(lambdaCats)")
             if isfile(maxfile)
                 jsondict = parsejsonfile(maxfile)
                 initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
@@ -1371,11 +1505,9 @@ function main()
             currentparams = getparams(initialparams,dataset,siteCats,lambdaCats,0)
             #currentparams.lambdazeroweight = max(currentparams.lambdazeroweight, 0.05)
         end
-        if run_args["shuffle"]
-            currentparams.lambdazeroweight = 0.50
-        end
+
         if run_args["unpaired"]
-            maxfile = string(outputprefix, ".max.unpaired")
+            maxfile = string(outputprefix, ".max.unpaired",".sitecats$(siteCats)")
             if isfile(maxfile)
                 jsondict = parsejsonfile(maxfile)
                 initialparams = convert(Array{Float64,1}, jsondict["maxparams"])
@@ -1394,10 +1526,40 @@ function main()
 
         if run_args["maxstructure"]
             println("Computing maximum likelihood structure")
-            maxstructure_trunc = computemaxstructure(dataset, currentparams, maxbasepairdistance, usecuda,true)
+            maxstructure_trunc = computemaxstructure(dataset, currentparams, maxbasepairdistance, usecuda,true, gapcutoff=run_args["gapcutoff"])
             writectfile(maxstructure_trunc, replace(dataset.sequences[1], "-" => "N"), string(outputprefix, ".maxstructuretrunc"))
-            maxstructure = computemaxstructure(dataset, currentparams, maxbasepairdistance, usecuda)
+            maxstructure = computemaxstructure(dataset, currentparams, maxbasepairdistance, usecuda, gapcutoff=run_args["gapcutoff"])
             writectfile(maxstructure, replace(dataset.sequences[1], "-" => "N"), string(outputprefix, ".maxstructure"))
+            exit()
+        end
+
+        if run_args["simulate"] > 0
+            simulatealignments(rng, dataset, currentparams, joinpath(outputdir,"simulations/"); samples=run_args["simulate"], usecuda=usecuda, maxbasepairdistance=maxbasepairdistance,fixGU=run_args["fixgu"],fixGCAU=run_args["fixgcau"],unpairedmodel=run_args["unpaired"])
+            maxfiles = [f for f in filter(x -> match(r".+(.max(\..*)*)$", x) != nothing, readdir(outputdir))]
+            
+            for sim=1:run_args["simulate"]
+                dst = joinpath(outputdir,"simulations/sim$(sim).nwk")
+                if !isfile(dst)
+                    cp(treefile,dst)
+                end
+            end
+            for maxfile in maxfiles
+                if !parsed_args["fixgu"] || (occursin(".fixgu.max", maxfile) || occursin(".max.unpaired",maxfile))
+                    for sim=1:run_args["simulate"]
+                        extension = match(r"(\..*)",maxfile)[1]
+                        src = joinpath(outputdir,maxfile)
+                        jsondict = JSON.parse(read(src, String))
+                        jsondict["Z"] = -1.0e20
+                        dst = joinpath(outputdir,"simulations/sim$(sim)$(extension)")
+                        #println(dst)
+                        if !isfile(dst)
+                            open(dst,"w") do f
+                                JSON.print(f, jsondict)
+                            end
+                        end
+                    end
+                end
+            end
             exit()
         end
 
@@ -1454,11 +1616,10 @@ function main()
                     println("Using Monte Carlo EM")
                     currentparams = mcem(dataset, siteCats, lambdaCats, fixGU, fixGCAU, unpairedmodel,run_args["maxmcemiter"],samplesperiter,maxbasepairdistance,currentparams, maxfile, usecuda)
                 else
-                    currentparams = optimizemodel(dataset, (run_args["structure"] == nothing ? zeros(Int,dataset.numcols) : pairedsites), siteCats, lambdaCats, fixGU,fixGCAU, true, unpairedmodel,2000,currentparams, maxfile, usecuda, maxbasepairdistance=maxbasepairdistance)
+                    currentparams = optimizemodel(dataset, (run_args["structure"] == nothing ? zeros(Int,dataset.numcols) : pairedsites), siteCats, lambdaCats, fixGU,fixGCAU, true, unpairedmodel,currentparams, maxfile, usecuda, maxbasepairdistance=maxbasepairdistance, gapcutoff=run_args["gapcutoff"], maxoptiter=run_args["maxoptiter"])
                 end
             else
-                maxoptiter = 2000
-                currentparams = optimizemodel(dataset,  (run_args["structure"] == nothing ? zeros(Int,dataset.numcols) : pairedsites), siteCats,lambdaCats,fixGU,fixGCAU,integratestructure,unpairedmodel,maxoptiter,currentparams, maxfile, usecuda, maxbasepairdistance=maxbasepairdistance)
+                currentparams = optimizemodel(dataset,  (run_args["structure"] == nothing ? zeros(Int,dataset.numcols) : pairedsites), siteCats,lambdaCats,fixGU,fixGCAU,integratestructure,unpairedmodel,currentparams, maxfile, usecuda, maxbasepairdistance=maxbasepairdistance, gapcutoff=run_args["gapcutoff"], maxoptiter=run_args["maxoptiter"])
             end
         end
 
@@ -1496,7 +1657,7 @@ function main()
                 #tic()
                 println("B. maxbasepairdistance: ", maxbasepairdistance)
                 pairedlogprobs, ret = coevolutionall(dataset,currentparams,true,false,true,maxbasepairdistance,usecuda)
-                maskgapped!(pairedlogprobs,dataset.gapfrequency,0.5,-Inf)
+                maskgapped!(pairedlogprobs,dataset.gapfrequency,run_args["gapcutoff"],-Inf)
                 inside = computeinsideKH99(unpairedlogprobs, pairedlogprobs, 1.0,false,usecuda)
                 savemaximum(inside[1,1,dataset.numcols], getparamsvector(currentparams), maxfile)
                 #elapsed = toc();

@@ -52,6 +52,7 @@ mutable struct KH99
   end
 end
 
+export nucmapping
 nucmapping = Dict('A' => 1, 'C' => 2, 'G' => 3, 'T' => 4, 'U' => 4)
 function safelog(x::Float64)
   if x < 0.0

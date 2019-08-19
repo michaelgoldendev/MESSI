@@ -1,4 +1,5 @@
-include("InsideCUDA.jl")
+push!(LOAD_PATH,joinpath(@__DIR__))
+using InsideCUDA
 
 function iterativeposteriordecoding(singleprobs::Array{Float64,1}, pairprobs::Array{Float64,2}, alpha::Float64=2.0)
     datalen = length(singleprobs)

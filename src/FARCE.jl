@@ -14,6 +14,8 @@ using Distributions
 include("TimingsLogger.jl")
 using LinearAlgebra
 using CommonUtils
+using Random
+using SharedArrays
 
 mutable struct FastCache
   size::Int
@@ -231,7 +233,7 @@ function gibbsampler(numGridPoints::Int, numSites::Int, conditionals::Array{Floa
   return θsum/c
 end
 
-include("InsideOutsideAlgorithm.jl")
+#include("InsideOutsideAlgorithm.jl")
 
 function getpartitions(len::Int,numparts::Int)
    	numpartitions = numparts
@@ -500,8 +502,79 @@ mutable struct ModelParameters
   end
 end
 
+function getbounds(fixGU::Bool, fixLambdaWeight::Bool, unpairedmodel::Bool, siteCats::Int=3, lambdaCats::Int=5,initialparams::Array{Float64,1}=2.0*ones(Float64,15))
+  lower = ones(Float64, 15)*1e-4
+  upper = ones(Float64, 15)*50.0
+  lower[1] = 1.0
+  lower[2] = 1.0
+  lower[3] = 1.0
+
+  lower[4] = 0.02
+  lower[5] = 0.02
+  lower[6] = 0.02
+  lower[7] = 0.02
+  lower[8] = 0.02
+  lower[9] = 0.02
+
+
+  lower[12] = 0.05
+  lower[13] = 0.05
+  lower[14] = 0.05
+  lower[15] = 0.0001  
+  if unpairedmodel
+      lower[10] = 1.0
+      lower[15] = 0.9999
+  end
+  if lambdaCats == 1
+    lower[10] = 1.0
+    lower[15] = 1e-4
+  end
+  upper[12] = 0.80
+  upper[13] = 0.80
+  upper[14] = 0.80
+  upper[15] = 0.9999  
+  if unpairedmodel
+      upper[1] = 1.0
+      upper[2] = 1.0
+      upper[3] = 1.0
+      upper[10] = 1.0
+  end
+  if lambdaCats == 1
+    upper[10] = 1.0
+    upper[15] = 1e-4
+  end
+  if fixGU
+    upper[3] = 1.0
+  end
+  if fixLambdaWeight
+      upper[15] = 1.0
+  end
+  #=
+  println("A")
+  initialparams = 2.0*ones(Float64,15)
+  if initparams == nothing
+      initialparams[1] = 1.5
+      initialparams[2] = 1.5
+      initialparams[3] = 1.5
+      initialparams[12] = 0.25
+      initialparams[13] = 0.25
+      initialparams[14] = 0.25
+      initialparams[15] = 0.5
+      println("B")
+  else
+      initialparams = getparamsvector(initparams)
+  end=#
+
+  for z=1:length(initialparams) # correct any out of bounds values
+    initialparams[z] = max(lower[z], initialparams[z])
+    initialparams[z] = min(upper[z], initialparams[z])
+  end
+
+  return lower,upper,initialparams
+end
+
 function getparamsvector(params::ModelParameters)
-    p = zeros(Float64,20)
+    p = zeros(Float64,15)
     p[1] = params.lambdaGC
     p[2] = params.lambdaAT
     p[3] = params.lambdaGT
@@ -513,19 +586,70 @@ function getparamsvector(params::ModelParameters)
     p[9] = params.q6
     p[10] = params.lambdaGammaShapeGC
     p[11] = params.siteGammaShape
+    """
+    p[12] = params.freqs[1]
+    p[13] = params.freqs[2]/(1.0-params.freqs[1])
+    p[14] = params.freqs[3]/(1.0-params.freqs[1]-params.freqs[2])
+    """
     p[12] = params.freqs[1]
     p[13] = params.freqs[2]
     p[14] = params.freqs[3]
+
     p[15] = params.lambdazeroweight
-    p[16] = params.lambdaGammaScaleGC
-    p[17] = params.lambdaGammaShapeAT
-    p[18] = params.lambdaGammaScaleAT
-    p[19] = params.lambdaGammaShapeGT
-    p[20] = params.lambdaGammaScaleGT
-    #p[15] = params.freqs[4]
     return p
 end
 
+function getparams(params::Array{Float64,1}, dataset::Dataset, siteCats::Int=3, lambdacats::Int=5, parameterisation::Int=1,fixGU::Bool=false,fixGCAU::Bool=false)
+  #=
+  f1 = params[12]
+  f2 = (1.0-f1)*params[13]
+  f3 = (1.0-f1-f2)*params[14]
+  f4 = (1.0-f1-f2-f3)
+  freqs = Float64[f1, f2, f3, f4]=#
+  freqs = Float64[params[12], params[13], params[14], 1.0 - params[12] - params[13] - params[14]]
+  currentparams = ModelParameters(freqs, params[1], params[2], params[3], params[4], params[5], params[6], params[7], params[8], params[9], getnodelist(dataset.root), params[15])
+  currentparams.lambdaGC = params[1]
+  currentparams.lambdaAT = params[2]
+  currentparams.lambdaGT = params[3]
+  currentparams.lambdaGammaShapeGC = params[10]
+  currentparams.siteGammaShape = params[11]
+  currentparams.siteGammaScale = 1.0 / currentparams.siteGammaShape
+  currentparams.lambdaCats = lambdacats - 1
+
+  #currentparams.lambdaweightsGC, currentparams.lambdaratesGC = discretizegamma2(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeGC, currentparams.lambdaGammaScaleGC, currentparams.lambdaCats,parameterisation)
+  #currentparams.lambdaweightsAT, currentparams.lambdaratesAT = discretizegamma2(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeAT, currentparams.lambdaGammaScaleAT, currentparams.lambdaCats,parameterisation)
+  #currentparams.lambdaweightsGT, currentparams.lambdaratesGT = discretizegamma2(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeGT, currentparams.lambdaGammaScaleGT, currentparams.lambdaCats,parameterisation)
+  currentparams.lambdaweightsGC, currentparams.lambdaratesGC, currentparams.lambdaweightsAT, currentparams.lambdaratesAT, currentparams.lambdaweightsGT, currentparams.lambdaratesGT = discretizegamma3(currentparams.lambdazeroweight, currentparams.lambdaGC, currentparams.lambdaAT, currentparams.lambdaGT, currentparams.lambdaGammaScaleGC, currentparams.lambdaCats, parameterisation)
+
+  if fixGCAU
+    currentparams.lambdaratesGC = copy(currentparams.lambdaratesAT)
+  end
+  if fixGU
+    currentparams.lambdaratesGT = zeros(Float64, length(currentparams.lambdaratesGT))
+  end
+  #println(currentparams.lambdaweightsGC,"\t",currentparams.lambdaweightsAT, "\t", currentparams.lambdaweightsGT)
+  #println(currentparams.lambdaratesGC,"\t",currentparams.lambdaratesAT, "\t", currentparams.lambdaratesGT)
+  #println(currentparams.lambdaGammaShapeGC,"\t",currentparams.lambdaGammaScaleGC, "\t", currentparams.lambdaGammaShapeAT, "\t", currentparams.lambdaGammaScaleAT,"\t",currentparams.lambdaGammaShapeGT, "\t", currentparams.lambdaGammaScaleGT)
+  #println(sum((currentparams.lambdaratesGC+1.0).*currentparams.lambdaweightsGC),"\t",sum((currentparams.lambdaratesAT+1.0).*currentparams.lambdaweightsAT), "\t", sum((currentparams.lambdaratesGT+1.0).*currentparams.lambdaweightsGT))
+  currentparams.siteCats = siteCats
+  currentparams.siteWeights = ones(Float64,currentparams.siteCats)/currentparams.siteCats
+  currentparams.siteRates = discretizegamma(currentparams.siteGammaShape, currentparams.siteGammaScale, currentparams.siteCats)
+  currentparams.states = Int[rand(1:siteCats) for i=1:dataset.numcols]
+  if length(currentparams.lambdaweightsGC) == 1
+    currentparams.lambdaratesGC[1] = currentparams.lambdaGC-1.0
+    currentparams.lambdaratesAT[1] = currentparams.lambdaAT-1.0
+    currentparams.lambdaratesGT[1] = currentparams.lambdaGT-1.0
+    currentparams.lambdaweightsGC[1] = 1.0
+    currentparams.lambdaweightsAT[1] = 1.0
+    currentparams.lambdaweightsGT[1] = 1.0
+  end
+  #println(currentparams.lambdaratesGC,"\t",currentparams.lambdaweightsGC)
+  #println(currentparams.lambdaratesAT,"\t",currentparams.lambdaweightsAT)
+  #println(currentparams.lambdaratesGT,"\t",currentparams.lambdaweightsGT)
+  return currentparams
+end
+
+#=
 function getparams(params::Array{Float64,1}, dataset::Dataset, siteCats::Int=3, lambdacats::Int=5, parameterisation::Int=1,fixGU::Bool=false,fixGCAU::Bool=false)
   freqs = Float64[params[12],params[13],params[14], 1.0 - params[12] - params[13] - params[14]]
   currentparams = ModelParameters(freqs, params[1], params[2], params[3], params[4], params[5], params[6], params[7], params[8], params[9], getnodelist(dataset.root), params[15])
@@ -560,7 +684,7 @@ function getparams(params::Array{Float64,1}, dataset::Dataset, siteCats::Int=3, 
   currentparams.states = Int[rand(1:siteCats) for i=1:dataset.numcols]
 
   return currentparams
-end
+end=#
 
 
 
@@ -593,14 +717,17 @@ function getmusespecificparamsarray(params::ModelParameters)
 end
 
 function getGC(params::ModelParameters, musespecificparams::MuseSpecificParameters)
+  #println("getGC ", params.lambdaratesGC[musespecificparams.lambdacat]+1.0)
   return params.lambdaratesGC[musespecificparams.lambdacat]+1.0
 end
 
 function getAT(params::ModelParameters, musespecificparams::MuseSpecificParameters)
+  #println("getAT ", params.lambdaratesAT[musespecificparams.lambdacat]+1.0)
   return params.lambdaratesAT[musespecificparams.lambdacat]+1.0
 end
 
 function getGT(params::ModelParameters, musespecificparams::MuseSpecificParameters)
+  #println("getGT ", params.lambdaratesGT[musespecificparams.lambdacat]+1.0)
   return params.lambdaratesGT[musespecificparams.lambdacat]+1.0
 end
 
@@ -2348,7 +2475,7 @@ function computemodellikelihood(rng::AbstractRNG, dataset::Dataset,params::Model
       #tic()
       unpairedll = sum(computeunpairedlikelihoods(dataset, params, museparams, params.states, paired, 1.0, false, rng, true))
       pairedll = felsensteincudapaired(dataset, paired, params, museparams)
-      GC.gc()
+      #GC.gc()
       #elapsed = toq()
       #logtime("structurell_cuda", elapsed, dataset.numcols)
     else
