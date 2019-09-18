@@ -8,7 +8,7 @@ Modelling Evolution of Secondary Structure Interactions
 ```
 cd /path_to_messi/MESSI/
 ```
-4. If you are running the code for the first time, run InstallDependencies.jl to install all the package dependencies:
+4. If you are running the code for the first time, run InstallDependencies.jl to install all the package dependencies. This can be done using the path to your julia executable:
 ```
 /path_to_julia/bin/julia src/InstallDependencies.jl
 ```
