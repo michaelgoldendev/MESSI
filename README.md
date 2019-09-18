@@ -8,7 +8,11 @@ Modelling Evolution of Secondary Structure Interactions
 ```
 cd /path_to_messi/MESSI/
 ```
-4. Run MESSI using the path to your julia executable and the path of your alignment file:
+4. If you are running the code for the first time, run InstallDependencies.jl to install all the package dependencies:
+```
+/path_to_julia/bin/julia src/InstallDependencies.jl
+```
+5. Run MESSI using the path to your julia executable and the path of your alignment file:
 ```
 /path_to_julia/bin/julia src/MESSI.jl --alignment /path_to_alignment/example.fas
 ```
