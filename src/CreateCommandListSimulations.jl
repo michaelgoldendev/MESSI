@@ -1,16 +1,43 @@
 dir = "../datasets/RFAM/3D/"
 
-alignmentpaths = ["../datasets/ssDNA/wdf_mcmc/wdf.fas.norm"]
+alignmentpaths = []
+push!(alignmentpaths, "..\\datasets\\ncRNA\\RF00003_mcmc\\RF00003_seperated.fas")
+push!(alignmentpaths, "..\\datasets\\ncRNA\\RF00001_mcmc2\\RF00001_seperated.fas")
+#push!(filepaths, "..\\datasets\\ncRNA\\RF00003_mcmc\\RF00003.fas.norm")
+#push!(filepaths, "..\\datasets\\ncRNA\\RF00010_mcmc\\RF00010.fas.norm")
+#push!(filepaths, "..\\datasets\\ncRNA\\RF00379_mcmc\\RF00379.fas.norm")
+push!(alignmentpaths, "..\\datasets\\ncRNA\\RF00379_mcmc\\RF00379_seperated.fas")
+#push!(filepaths, "..\\datasets\\ncRNA\\RF01846_mcmc\\RF01846.fas.norm")
+push!(alignmentpaths, "..\\datasets\\ncRNA\\RF01846_mcmc\\RF01846_seperated.fas")
+push!(alignmentpaths, "..\\datasets\\ncRNA\\RF00010_mcmc\\RF00010_seperated.fas")
+
+#push!(alignmentpaths, "..\\datasets\\ssDNA\\wdf_mcmc\\wdf_seperated.fas")
+#push!(alignmentpaths, "..\\datasets\\ssDNA\\beet_curly_mcmc\\bctv_seperated.fas")
+#push!(alignmentpaths, "..\\datasets\\ssDNA\\bocavirus_mcmc\\bocavirus_seperated.fas")
+#push!(alignmentpaths, "..\\datasets\\ssDNA\\msv\\msv_seperated.fas")
+#push!(alignmentpaths, "..\\datasets\\ssDNA\\tylcv\\tylcv_seperated.fas")
+
+#push!(filepaths, "..\\datasets\\ssDNA\\beet_curly_mcmc\\bctv.fas.norm")
+#push!(filepaths, "..\\datasets\\ssDNA\\beet_curly_mcmc\\bctv_seperated.fas")
+
+#push!(filepaths, "..\\datasets\\ssDNA\\bocavirus_mcmc\\bocavirus.fas.norm")
+
+
+#push!(filepaths, "..\\datasets\\ssRNA\\rhinovirus_a_recombination\\rhinovirus_a_seperated_alignment.fas")
+
+
 #alignmentpaths = ["../datasets/ssRNA/hepa/hepa.fas.norm"]
 #alignmentpaths = ["../datasets/ssDNA/msv/msv.fas.norm"]
 
-numsims = 10
+#=
+
+numsims = 20
 for alignmentpath in alignmentpaths
 	m = match(r"^([^\.]+)\..+$", basename(alignmentpath))
 	
-	println("julia MESSI.jl --alignment $(alignmentpath) --unpaired --maxbasepairdistance 500 --numlambdacats 1")
-	println("julia MESSI.jl --alignment $(alignmentpath) --fixgu  --maxbasepairdistance 500 --numlambdacats 1")
-	println("julia MESSI.jl --alignment $(alignmentpath)  --maxbasepairdistance 500 --numlambdacats 1")
+	#println("julia MESSI.jl --alignment $(alignmentpath) --unpaired --maxbasepairdistance 500 --numlambdacats 1")
+	#println("julia MESSI.jl --alignment $(alignmentpath) --fixgu  --maxbasepairdistance 500 --numlambdacats 1")
+	#println("julia MESSI.jl --alignment $(alignmentpath)  --maxbasepairdistance 500 --numlambdacats 1")
 	println("julia MESSI.jl --alignment $(alignmentpath)  --simulate $(numsims) --fixgu  --maxbasepairdistance 500 --numlambdacats 1")
 	for sim=1:numsims
 		outputprefix = "results/$(m[1])/simulations/sim$(sim)"
@@ -18,6 +45,7 @@ for alignmentpath in alignmentpaths
 		println("julia MESSI.jl --alignment $(outputprefix).fas --tree $(outputprefix).nwk --outputprefix $(outputprefix) --maxbasepairdistance 500 --numlambdacats 1")
 	end
 end
+exit()=#
 
 using JSON
 for alignmentpath in alignmentpaths

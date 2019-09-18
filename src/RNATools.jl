@@ -1,5 +1,7 @@
 push!(LOAD_PATH,joinpath(@__DIR__))
-using InsideCUDA
+
+#using InsideCUDA
+include("InsideCUDA.jl")
 
 function iterativeposteriordecoding(singleprobs::Array{Float64,1}, pairprobs::Array{Float64,2}, alpha::Float64=2.0)
     datalen = length(singleprobs)
@@ -295,7 +297,11 @@ function f1score(real::Array{Int,1}, predicted::Array{Int,1})
   p = precision(real, predicted)
   r = recall(real, predicted)
 
-  return 2.0*p*r/(p+r)
+  res = 2.0*p*r/(p+r)
+  if isnan(res)
+    return 0.5
+  end
+  return res
 end
 
 function weightedmountainvector(paired::Array{Int,1})
@@ -396,7 +402,7 @@ function writectfile(paired::Array{Int,1}, seq::AbstractString, filename::Abstra
 end
 
 function runppfold(alignmentfile, treefile, outputdir)
-  run(`java -Xmx16G -jar ../binaries/PPfold3.1.1.jar $alignmentfile -t $treefile --onlyCT -o $outputdir`)
+  run(`java -Xmx12G -jar ../binaries/PPfold3.1.1.jar $alignmentfile -t $treefile --onlyCT -o $outputdir`)
   m = match(r"^(.*/)([^/]*)$", alignmentfile)
   #outputdir = m[1]
   f = string(match(r"([^\\]*\.)(\w+)$",m[2])[1], "ct")

@@ -1,0 +1,44 @@
+# STOCKHOLM 1.0
+
+#=GF AC   RF01826
+#=GF ID   SAM_V
+#=GF DE   SAM-V riboswitch
+#=GF AU   Moore B; 0000-0002-4074-1933
+#=GF SE   Published; PMID:19531245
+#=GF SS   Published; PMID:19531245
+#=GF GA   41.00
+#=GF TC   41.00
+#=GF NC   40.70
+#=GF TP   Cis-reg; riboswitch;
+#=GF BM   cmbuild -F CM SEED
+#=GF CB   cmcalibrate --mpi CM
+#=GF SM   cmsearch --cpu 4 --verbose --nohmmonly -E 1000 -Z 549862.597050 CM SEQDB
+#=GF DR   SO; 0000035; riboswitch;
+#=GF DR   GO; 0010468; regulation of gene expression;
+#=GF DR   GO; 0046500; S-adenosylmethionine metabolic process;
+#=GF RN   [1]
+#=GF RM   19776155
+#=GF RT   A variant riboswitch aptamer class for S-adenosylmethionine common in
+#=GF RT   marine bacteria.
+#=GF RA   Poiata E, Meyer MM, Ames TD, Breaker RR
+#=GF RL   RNA. 2009;15:2046-2056.
+#=GF RN   [2]
+#=GF RM   19531245
+#=GF RT   Identification of candidate structured RNAs in the marine organism
+#=GF RT   'Candidatus Pelagibacter ubique'.
+#=GF RA   Meyer MM, Ames TD, Smith DP, Weinberg Z, Schwalbach MS, Giovannoni SJ,
+#=GF RA   Breaker RR
+#=GF RL   BMC Genomics. 2009;10:268.
+#=GF WK   SAM-V_riboswitch
+#=GF SQ   6
+
+
+AACY023226915.1/901-837      AAUUAAGCCGGGC--AGUUGAACCAUAUUGUGCGCCCUGCAUU-UGCUUAAGCACUAAA-AAGGAGAAA
+ABOH01000803.1/30-94         AUUAAAGCCGGGU--AUUUGAACCGUAUUGUGCACCCUGCAUU-UGCUAAAGCACUAAA-AAGGAGAAA
+CP000084.1/732850-732787     AAUUGGUAAAGGU--AGUUGAACUGUAUUGUGCACCUUGCAUAGAGCUAAAGCACUAAA-AA--AGUAA
+ABVS01000001.1/912548-912482 AUAAUCGGUAGGC--AUUUGAACUGUAUUGUGCGCCUAACAUAAAGUUAAAGCACUAAAAAAGGAGUAA
+AAPV01000002.1/208413-208345 AUUAUCGGUAGGCGCAUUUGAACUGUAUUGUACGCCUUGCAUAAAGCAAAAGUACUAAAAAAGGAGUAU
+CP000084.1/1127423-1127359   AAUUAAGCCGGGC--AGUUGAACCAUAUUGUGCGCCCUGCAUU-UGCUUAAGCACUAAA-AAGGAGAAA
+#=GC SS_cons                 :::::::::<<<<..__________________>>>>::::::::::::::::::::::.:::::::::
+#=GC RF                      AuUaaaGgugGGc..AuUUGAACuGUAUUGUGCgCCcUGCAUaaaGCUAAAGCACUAAA.AAGGAGuAA
+//

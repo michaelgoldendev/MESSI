@@ -502,7 +502,7 @@ mutable struct ModelParameters
   end
 end
 
-function getbounds(fixGU::Bool, fixLambdaWeight::Bool, unpairedmodel::Bool, siteCats::Int=3, lambdaCats::Int=5,initialparams::Array{Float64,1}=2.0*ones(Float64,15))
+function getbounds(fixGU::Bool, fixLambdaWeight::Bool, unpairedmodel::Bool, siteCats::Int=3, lambdaCats::Int=5,initialparams::Array{Float64,1}=2.0*ones(Float64,15); coevolutionparamsonly::Bool=false)
   lower = ones(Float64, 15)*1e-4
   upper = ones(Float64, 15)*50.0
   lower[1] = 1.0
@@ -529,9 +529,9 @@ function getbounds(fixGU::Bool, fixLambdaWeight::Bool, unpairedmodel::Bool, site
     lower[10] = 1.0
     lower[15] = 1e-4
   end
-  upper[12] = 0.80
-  upper[13] = 0.80
-  upper[14] = 0.80
+  upper[12] = 0.5
+  upper[13] = 0.5
+  upper[14] = 0.5
   upper[15] = 0.9999  
   if unpairedmodel
       upper[1] = 1.0
@@ -570,6 +570,13 @@ function getbounds(fixGU::Bool, fixLambdaWeight::Bool, unpairedmodel::Bool, site
     initialparams[z] = min(upper[z], initialparams[z])
   end
 
+  if coevolutionparamsonly
+    for z=4:length(initialparams)
+      lower[z] = initialparams[z]
+      upper[z] = initialparams[z]
+    end
+  end
+
   return lower,upper,initialparams
 end
 
@@ -599,7 +606,7 @@ function getparamsvector(params::ModelParameters)
     return p
 end
 
-function getparams(params::Array{Float64,1}, dataset::Dataset, siteCats::Int=3, lambdacats::Int=5, parameterisation::Int=1,fixGU::Bool=false,fixGCAU::Bool=false)
+function getparams(params::Array{Float64,1}, dataset::Dataset, siteCats::Int=3, lambdaCats::Int=5, parameterisation::Int=1,fixGU::Bool=false,fixGCAU::Bool=false)
   #=
   f1 = params[12]
   f2 = (1.0-f1)*params[13]
@@ -614,7 +621,7 @@ function getparams(params::Array{Float64,1}, dataset::Dataset, siteCats::Int=3, 
   currentparams.lambdaGammaShapeGC = params[10]
   currentparams.siteGammaShape = params[11]
   currentparams.siteGammaScale = 1.0 / currentparams.siteGammaShape
-  currentparams.lambdaCats = lambdacats - 1
+  currentparams.lambdaCats = lambdaCats - 1
 
   #currentparams.lambdaweightsGC, currentparams.lambdaratesGC = discretizegamma2(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeGC, currentparams.lambdaGammaScaleGC, currentparams.lambdaCats,parameterisation)
   #currentparams.lambdaweightsAT, currentparams.lambdaratesAT = discretizegamma2(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeAT, currentparams.lambdaGammaScaleAT, currentparams.lambdaCats,parameterisation)
@@ -650,7 +657,7 @@ function getparams(params::Array{Float64,1}, dataset::Dataset, siteCats::Int=3, 
 end
 
 #=
-function getparams(params::Array{Float64,1}, dataset::Dataset, siteCats::Int=3, lambdacats::Int=5, parameterisation::Int=1,fixGU::Bool=false,fixGCAU::Bool=false)
+function getparams(params::Array{Float64,1}, dataset::Dataset, siteCats::Int=3, lambdaCats::Int=5, parameterisation::Int=1,fixGU::Bool=false,fixGCAU::Bool=false)
   freqs = Float64[params[12],params[13],params[14], 1.0 - params[12] - params[13] - params[14]]
   currentparams = ModelParameters(freqs, params[1], params[2], params[3], params[4], params[5], params[6], params[7], params[8], params[9], getnodelist(dataset.root), params[15])
   currentparams.lambdaGammaShapeGC = params[10]
@@ -661,7 +668,7 @@ function getparams(params::Array{Float64,1}, dataset::Dataset, siteCats::Int=3, 
   currentparams.lambdaGammaScaleGT = params[20]
   currentparams.siteGammaShape = params[11]
   currentparams.siteGammaScale = 1.0 / currentparams.siteGammaShape
-  currentparams.lambdaCats = lambdacats - 1
+  currentparams.lambdaCats = lambdaCats - 1
 
   #currentparams.lambdaweightsGC, currentparams.lambdaratesGC = discretizegamma2(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeGC, currentparams.lambdaGammaScaleGC, currentparams.lambdaCats,parameterisation)
   #currentparams.lambdaweightsAT, currentparams.lambdaratesAT = discretizegamma2(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeAT, currentparams.lambdaGammaScaleAT, currentparams.lambdaCats,parameterisation)

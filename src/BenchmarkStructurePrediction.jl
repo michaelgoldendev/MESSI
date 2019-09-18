@@ -146,8 +146,9 @@ for x in v
 
 
     str = ""
+    rfamid = match(r"(.+)\.fas\.norm", filename)[1]
     str = string(str, " & ", "Our method & ", getbenchmarkvalue(1, 1, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(1, 2, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(1, 3, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(1, 4, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(1, 5, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(1, 6, ourmethod, ppfoldmethod, rnaalifoldmethod), "\\\\*\n")
-    str = string(str, filename, " & ", "PPfold & ", getbenchmarkvalue(2, 1, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(2, 2, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(2, 3, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(2, 4, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(2, 5, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(2, 6, ourmethod, ppfoldmethod, rnaalifoldmethod), " \\\\*\n")
+    str = string(str, rfamid, " & ", "PPfold & ", getbenchmarkvalue(2, 1, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(2, 2, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(2, 3, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(2, 4, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(2, 5, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(2, 6, ourmethod, ppfoldmethod, rnaalifoldmethod), " \\\\*\n")
     str = string(str, " & ", "RNAalifold & ", getbenchmarkvalue(3, 1, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ",getbenchmarkvalue(3, 2, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(3, 3, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(3, 4, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(3, 5, ourmethod, ppfoldmethod, rnaalifoldmethod), " & ", getbenchmarkvalue(3, 6, ourmethod, ppfoldmethod, rnaalifoldmethod), " \\tabularnewline\n")
     str = string(str, "\\midrule\n")
 

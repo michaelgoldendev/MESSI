@@ -9,7 +9,7 @@ using CommonUtils
 #using HDF5
 
 function getparamsvector2(params::ModelParameters)
-    p = zeros(Float64,20)
+    p = zeros(Float64,15)
     p[1] = params.lambdaGC
     p[2] = params.lambdaAT
     p[3] = params.lambdaGT
@@ -25,11 +25,12 @@ function getparamsvector2(params::ModelParameters)
     p[13] = params.freqs[2]
     p[14] = params.freqs[3]
     p[15] = params.lambdazeroweight
+    #=
     p[16] = params.lambdaGammaScaleGC
     p[17] = params.lambdaGammaShapeAT
     p[18] = params.lambdaGammaScaleAT
     p[19] = params.lambdaGammaShapeGT
-    p[20] = params.lambdaGammaScaleGT
+    p[20] = params.lambdaGammaScaleGT=#
     #p[15] = params.freqs[4]
     return p
 end
@@ -313,12 +314,13 @@ function gettuningvector(params::ModelParameters)
     p[6] = params.q6
     p[7] = params.siteGammaShape
     p[8] = params.lambdazeroweight
-    p[9] = params.lambdaGammaShapeGC
+
+    p[9] = params.lambdaGC
     p[10] = params.lambdaGammaScaleGC
-    p[11] = params.lambdaGammaShapeAT
-    p[12] = params.lambdaGammaScaleAT
-    p[13] = params.lambdaGammaShapeGT
-    p[14] = params.lambdaGammaScaleGT
+    p[11] = params.lambdaAT
+    p[12] = params.lambdaGammaScaleGC
+    p[13] = params.lambdaGT
+    p[14] = params.lambdaGammaScaleGC
 
     return p
 end
@@ -335,12 +337,25 @@ function settuningparams(params::Array{Float64,1}, currentparams::ModelParameter
   currentparams.siteGammaShape = params[7]
   currentparams.siteGammaScale = 1.0 / currentparams.siteGammaShape
   currentparams.lambdazeroweight = params[8]
+  currentparams.lambdaGC = params[9]
+  currentparams.lambdaGammaShapeGC = params[9]
+  currentparams.lambdaGammaScaleGC = params[10]
+
+  currentparams.lambdaAT = params[11]
+  currentparams.lambdaGammaShapeAT = params[11]
+  currentparams.lambdaGammaScaleAT = params[10]
+
+  currentparams.lambdaGT = params[13]
+  currentparams.lambdaGammaShapeGT = params[13]
+  currentparams.lambdaGammaScaleGT = params[10]
+  #=
   currentparams.lambdaGammaShapeGC = params[9]
   currentparams.lambdaGammaScaleGC = params[10]
   currentparams.lambdaGammaShapeAT = params[11]
   currentparams.lambdaGammaScaleAT = params[12]
   currentparams.lambdaGammaShapeGT = params[13]
   currentparams.lambdaGammaScaleGT = params[14]
+  =#
 
   if isvalid(currentparams)
     #currentparams.lambdaweightsGC, currentparams.lambdaratesGC = discretizegamma2(currentparams.lambdazeroweight, currentparams.lambdaGammaShapeGC, currentparams.lambdaGammaScaleGC, currentparams.lambdaCats)
@@ -657,7 +672,7 @@ function computeinformationentropy(dataset::Dataset, params::ModelParameters, ma
   return h, hmax
 end
 
-function runchain(runiters::Int, chain::Chain, dataset::Dataset, grammar::KH99, outputprefix::AbstractString, outputprefixchain::AbstractString, mcmcoptions::MCMCoptions, burnins::Array{Int,1}, burnindata::Array{Float64,2}=nothing, thermodynamicsamples::Dict{Int, Array{Array{Int,1}}}=Dict{Int, Array{Array{Int,1}}}(), tuningvectors::Array{Array{Float64,1},1}=Array{Float64,1}[], branchtuningvectors::Array{Array{Float64,1},1}=Array{Float64,1}[], covmatin=nothing)
+function runchain(runiters::Int, chain::Chain, dataset::Dataset, grammar::KH99, outputprefix::AbstractString, outputprefixchain::AbstractString, mcmcoptions::MCMCoptions, burnins::Array{Int,1}, burnindata::Array{Float64,2}=nothing, thermodynamicsamples::Dict{Int, Array{Array{Int,1}}}=Dict{Int, Array{Array{Int,1}}}(), tuningvectors::Array{Array{Float64,1},1}=Array{Float64,1}[], branchtuningvectors::Array{Array{Float64,1},1}=Array{Float64,1}[], covmatin=nothing; siteCats::Int=siteCats, lambdaCats::Int=lambdaCats, fixGU::Bool=false, fixGCAU::Bool=false)
   usemodelswitch = false
   mode = mcmcoptions.mode
   M = mcmcoptions.M
@@ -742,6 +757,10 @@ function runchain(runiters::Int, chain::Chain, dataset::Dataset, grammar::KH99, 
   moveweights = onedarray(jsondict["moveweights"])
   if samplebranchlengths
     push!(moveweights, 2.0)
+  end
+  if lambdaCats == 1
+    moveweights[5] = 0.0
+    moveweights[6] = 0.0
   end
 
   sigmas = ones(Float64,6+length(chain.currentparams.branchlengths)-1)*0.25
@@ -1527,6 +1546,9 @@ function runchain(runiters::Int, chain::Chain, dataset::Dataset, grammar::KH99, 
           mask = zeros(Int,14)
           #counting = Int[i for i=8:14]
           counting = Int[8,9,10,11,13]
+          if lambdaCats == 1
+            counting = Int[9,11,13]
+          end
           shuffle!(counting)
           for i=1:2
             mask[counting[i]] = 1
@@ -1551,6 +1573,12 @@ function runchain(runiters::Int, chain::Chain, dataset::Dataset, grammar::KH99, 
           #mask[12] = 1
           mask[13] = 1
           #mask[14] = 1
+
+          if lambdaCats == 1
+            mask[8] = 0
+            mask[10] = 0
+          end
+
 
 
           #mask[rand(chain.rng,9:14)] = 1
@@ -1606,7 +1634,23 @@ function runchain(runiters::Int, chain::Chain, dataset::Dataset, grammar::KH99, 
 
 
 
+      
+
+
+
       cont = isvalid(chain.proposedparams)
+      #=
+      if length(chain.proposedparams.lambdaweightsGC) == 1
+        chain.proposedparams.lambdaratesGC[1] = chain.proposedparams.lambdaGC-1.0
+        chain.proposedparams.lambdaratesAT[1] = chain.proposedparams.lambdaAT-1.0
+        chain.proposedparams.lambdaratesGT[1] = chain.proposedparams.lambdaGT-1.0
+        chain.proposedparams.lambdaweightsGC[1] = 1.0
+        chain.proposedparams.lambdaweightsAT[1] = 1.0
+        chain.proposedparams.lambdaweightsGT[1] = 1.0
+        #chain.proposedparams.lambdazeroweight = 1.0
+      end=#
+      paramsvector = getparamsvector(chain.proposedparams)
+      chain.proposedparams = getparams(paramsvector, dataset, siteCats, lambdaCats, 1, fixGU, fixGCAU)
       if cont
         chain.proposedll = computetotallikelihood(chain.rng, dataset, chain.proposedparams, chain.paired, samplebranchlengths,integratesiterates,integratestructure,M,true,maxbasepairdistance, usecuda)
       end
@@ -1655,7 +1699,8 @@ function runchain(runiters::Int, chain::Chain, dataset::Dataset, grammar::KH99, 
       meanlambdaGC = sum((chain.currentparams.lambdaratesGC.+1.0).*chain.currentparams.lambdaweightsGC)
       meanlambdaAT = sum((chain.currentparams.lambdaratesAT.+1.0).*chain.currentparams.lambdaweightsAT)
       meanlambdaGT = sum((chain.currentparams.lambdaratesGT.+1.0).*chain.currentparams.lambdaweightsGT)
-      write(mcmclog, string(iter,"\t",chain.currentll, "\t", chain.proposedll,"\t", propratio,"\t", meanlambdaGC, "\t", meanlambdaAT, "\t", meanlambdaGT, "\t", chain.currentparams.lambdazeroweight, "\t", chain.currentparams.lambdaGammaShapeGC, "\t", chain.currentparams.lambdaGammaScaleGC, "\t", chain.currentparams.lambdaGammaShapeAT, "\t", chain.currentparams.lambdaGammaScaleAT, "\t", chain.currentparams.lambdaGammaShapeGT, "\t", chain.currentparams.lambdaGammaScaleGT, "\t", chain.currentparams.siteGammaShape, "\t", chain.currentparams.siteGammaScale, "\t", chain.currentparams.q1, "\t", chain.currentparams.q2, "\t", chain.currentparams.q3, "\t", chain.currentparams.q4, "\t", chain.currentparams.q5, "\t", chain.currentparams.q6,"\t"))
+      #write(mcmclog, string(iter,"\t",chain.currentll, "\t", chain.proposedll,"\t", propratio,"\t", meanlambdaGC, "\t", meanlambdaAT, "\t", meanlambdaGT, "\t", chain.currentparams.lambdazeroweight, "\t", chain.currentparams.lambdaGammaShapeGC, "\t", chain.currentparams.lambdaGammaScaleGC, "\t", chain.currentparams.lambdaGammaShapeAT, "\t", chain.currentparams.lambdaGammaScaleAT, "\t", chain.currentparams.lambdaGammaShapeGT, "\t", chain.currentparams.lambdaGammaScaleGT, "\t", chain.currentparams.siteGammaShape, "\t", chain.currentparams.siteGammaScale, "\t", chain.currentparams.q1, "\t", chain.currentparams.q2, "\t", chain.currentparams.q3, "\t", chain.currentparams.q4, "\t", chain.currentparams.q5, "\t", chain.currentparams.q6,"\t"))
+      write(mcmclog, string(iter,"\t",chain.currentll, "\t", chain.proposedll,"\t", propratio,"\t", chain.currentparams.lambdaGC, "\t", chain.currentparams.lambdaAT, "\t", chain.currentparams.lambdaGT, "\t", chain.currentparams.lambdazeroweight, "\t", chain.currentparams.lambdaGammaShapeGC, "\t", chain.currentparams.lambdaGammaScaleGC, "\t", chain.currentparams.lambdaGammaShapeAT, "\t", chain.currentparams.lambdaGammaScaleAT, "\t", chain.currentparams.lambdaGammaShapeGT, "\t", chain.currentparams.lambdaGammaScaleGT, "\t", chain.currentparams.siteGammaShape, "\t", chain.currentparams.siteGammaScale, "\t", chain.currentparams.q1, "\t", chain.currentparams.q2, "\t", chain.currentparams.q3, "\t", chain.currentparams.q4, "\t", chain.currentparams.q5, "\t", chain.currentparams.q6,"\t"))
       if samplebranchlengths
         for b=2:length(chain.currentparams.branchlengths)
           write(mcmclog, string(chain.currentparams.branchlengths[b],"\t"))

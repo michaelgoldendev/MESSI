@@ -1,0 +1,38 @@
+julia MESSI.jl --alignment ..\datasets\ssRNA\hepa\hepa_seperated.fas --numlambdacats 1 --maxbasepairdistance 500 --unpaired
+julia MESSI.jl --alignment ..\datasets\ssRNA\hepa\hepa_seperated.fas --numlambdacats 1 --maxbasepairdistance 500 --optimizecoevolutiononly --maxoptiter 400
+julia MESSI.jl --alignment ..\datasets\ssRNA\hepa\hepa_seperated.fas --numlambdacats 1 --maxbasepairdistance 500
+julia MESSI.jl --alignment ..\datasets\ssRNA\hepa\hepa_seperated.fas --numlambdacats 1 --maxbasepairdistance 500 --fixgu --optimizecoevolutiononly --maxoptiter 300
+julia MESSI.jl --alignment ..\datasets\ssRNA\hepa\hepa_seperated.fas --numlambdacats 1 --maxbasepairdistance 500 --fixgu
+julia MESSI.jl --alignment ..\datasets\ssRNA\hepa\hepa.fas.norm --numlambdacats 1 --maxbasepairdistance 500 --unpaired
+julia MESSI.jl --alignment ..\datasets\ssRNA\hepa\hepa.fas.norm --numlambdacats 1 --maxbasepairdistance 500 --optimizecoevolutiononly --maxoptiter 400
+julia MESSI.jl --alignment ..\datasets\ssRNA\hepa\hepa.fas.norm --numlambdacats 1 --maxbasepairdistance 500
+julia MESSI.jl --alignment ..\datasets\ssRNA\hepa\hepa.fas.norm --numlambdacats 1 --maxbasepairdistance 500 --fixgu --optimizecoevolutiononly --maxoptiter 300
+julia MESSI.jl --alignment ..\datasets\ssRNA\hepa\hepa.fas.norm --numlambdacats 1 --maxbasepairdistance 500 --fixgu
+julia MESSI.jl --alignment ..\datasets\ssRNA\hpv1\hpv1_seperated.fas  --numlambdacats 1 --maxbasepairdistance 500 --unpaired
+julia MESSI.jl --alignment ..\datasets\ssRNA\hpv1\hpv1_seperated.fas  --numlambdacats 1 --maxbasepairdistance 500  --optimizecoevolutiononly --maxoptiter 400
+julia MESSI.jl --alignment ..\datasets\ssRNA\hpv1\hpv1_seperated.fas  --numlambdacats 1 --maxbasepairdistance 500
+julia MESSI.jl --alignment ..\datasets\ssRNA\hpv1\hpv1_seperated.fas  --numlambdacats 1 --maxbasepairdistance 500 --fixgu --optimizecoevolutiononly  --maxoptiter 300
+
+julia MESSI.jl --alignment ..\datasets\ssRNA\rhinovirus_a\rhinovirus_a.fas.norm  --numlambdacats 1 --maxbasepairdistance 500 --unpaired
+julia MESSI.jl --alignment ..\datasets\ssRNA\rhinovirus_a\rhinovirus_a.fas.norm  --numlambdacats 1 --maxbasepairdistance 500  --optimizecoevolutiononly --maxoptiter 400
+julia MESSI.jl --alignment ..\datasets\ssRNA\rhinovirus_a\rhinovirus_a.fas.norm  --numlambdacats 1 --maxbasepairdistance 500
+julia MESSI.jl --alignment ..\datasets\ssRNA\rhinovirus_a\rhinovirus_a.fas.norm  --numlambdacats 1 --maxbasepairdistance 500 --fixgu --optimizecoevolutiononly  --maxoptiter 300
+julia MESSI.jl --alignment ..\datasets\ssRNA\rhinovirus_a\rhinovirus_a.fas.norm  --numlambdacats 1 --maxbasepairdistance 500 --fixgu
+julia MESSI.jl --alignment ..\datasets\ssRNA\fmdv\fmdv_seperated.fas  --numlambdacats 1 --maxbasepairdistance 500 --unpaired
+julia MESSI.jl --alignment ..\datasets\ssRNA\fmdv\fmdv_seperated.fas  --numlambdacats 1 --maxbasepairdistance 500  --optimizecoevolutiononly --maxoptiter 400
+julia MESSI.jl --alignment ..\datasets\ssRNA\fmdv\fmdv_seperated.fas  --numlambdacats 1 --maxbasepairdistance 500
+julia MESSI.jl --alignment ..\datasets\ssRNA\fmdv\fmdv_seperated.fas  --numlambdacats 1 --maxbasepairdistance 500 --fixgu --optimizecoevolutiononly  --maxoptiter 300
+julia MESSI.jl --alignment ..\datasets\ssRNA\fmdv\fmdv_seperated.fas  --numlambdacats 1 --maxbasepairdistance 500 --fixgu
+julia MESSI.jl --alignment ..\datasets\ssRNA\fmdv\fmdv.fas.norm  --numlambdacats 1 --maxbasepairdistance 500 --unpaired
+julia MESSI.jl --alignment ..\datasets\ssRNA\fmdv\fmdv.fas.norm  --numlambdacats 1 --maxbasepairdistance 500  --optimizecoevolutiononly --maxoptiter 400
+julia MESSI.jl --alignment ..\datasets\ssRNA\fmdv\fmdv.fas.norm  --numlambdacats 1 --maxbasepairdistance 500
+julia MESSI.jl --alignment ..\datasets\ssRNA\fmdv\fmdv.fas.norm  --numlambdacats 1 --maxbasepairdistance 500 --fixgu --optimizecoevolutiononly  --maxoptiter 300
+julia MESSI.jl --alignment ..\datasets\ssRNA\fmdv\fmdv.fas.norm  --numlambdacats 1 --maxbasepairdistance 500 --fixgu
+
+julia MESSI.jl --alignment ..\datasets\ssRNA\hpv1\hpv1_seperated.fas  --numlambdacats 1 --maxbasepairdistance 500 --fixgu
+julia MESSI.jl --alignment ..\datasets\ssRNA\hpv1\hpv1.fas.norm  --numlambdacats 1 --maxbasepairdistance 500 --unpaired
+julia MESSI.jl --alignment ..\datasets\ssRNA\hpv1\hpv1.fas.norm  --numlambdacats 1 --maxbasepairdistance 500  --optimizecoevolutiononly --maxoptiter 400
+julia MESSI.jl --alignment ..\datasets\ssRNA\hpv1\hpv1.fas.norm  --numlambdacats 1 --maxbasepairdistance 500
+julia MESSI.jl --alignment ..\datasets\ssRNA\hpv1\hpv1.fas.norm  --numlambdacats 1 --maxbasepairdistance 500 --fixgu --optimizecoevolutiononly  --maxoptiter 300
+julia MESSI.jl --alignment ..\datasets\ssRNA\hpv1\hpv1.fas.norm  --numlambdacats 1 --maxbasepairdistance 500 --fixgu
+

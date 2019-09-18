@@ -22,8 +22,9 @@ for f in filter(x -> match(r".+\.stockholm\.txt", x) != nothing, readdir(dir))
 		elseif match(r"(.+)\s+(.+)",line) != nothing
 			m = match(r"(.+)\s+(.+)", line)
 			println(alignout, ">", m[1])
-			println(alignout, m[2])
-			lastseq = m[2]
+			seq = replace(uppercase(m[2]), "U" => "T")
+			println(alignout, seq)
+			lastseq = seq
 		end
 	end	
 	close(alignout)

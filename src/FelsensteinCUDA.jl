@@ -212,8 +212,7 @@ xindices = nothing
 yindices = nothing
 leftrightindices = nothing
 function felsensteincuda(dataset::Dataset, params::ModelParameters, museparams::Array{MuseSpecificParameters,1}, maxbasepairdistance::Int=1000000, keepmuseconditionals::Bool=false)
-    println("FELSENSTEIN START")
-    #CuArrays.pool_status()
+    
     #return zeros(Float64,numcols,numcols), Array{Float64,2}[]
     #println("maxbasepairdistance: ", maxbasepairdistance)
     alphabet::Int32 = Int32(16)
@@ -241,6 +240,10 @@ function felsensteincuda(dataset::Dataset, params::ModelParameters, museparams::
     dev = CuDevice(0)
     ctx = CuContext(dev)
     #println("Initial Fels ", Mem.used(),"\t",Mem.total())
+    if dataset.numcols > 3000
+        println("FELSENSTEIN MIDDLE")
+        CuArrays.pool_status()
+    end
 
     md = CuModuleFile(joinpath(@__DIR__,"cuda","felsenstein.ptx"))
     cudafelsensteinleaves= CuFunction(md, "_Z19felsensteinleaves16iiPKiS0_PfS1_")
@@ -258,7 +261,7 @@ function felsensteincuda(dataset::Dataset, params::ModelParameters, museparams::
         end
     end
 
-    println("LENGTH = ", length(xindices[1]))
+    #println("LENGTH = ", length(xindices[1]))
     d_finallogliks =  CuArray(zeros(Float32, length(xindices[1]))) #Mem.alloc(Float32, length(xindices[1]))
     d_museconditionals = nothing
 
@@ -505,8 +508,10 @@ function felsensteincuda(dataset::Dataset, params::ModelParameters, museparams::
     #unsafe_reset!(dev)
     #elapsed = toc()
     #println("CUDA ",elapsed)
-    println("FELSENSTEIN END")
-    #CuArrays.pool_status()
+    #if dataset.numcols > 3000
+    #    println("FELSENSTEIN END")
+    #    CuArrays.pool_status()
+    #end
     return mat, ret
 end
 
@@ -858,8 +863,10 @@ while length(stack) > 0
 
             completednode = pop!(stack)
             completed[completednode] = completednode
-
-            #Mem.free(d_left)
+            delete!(store, leftchildindex)
+            CuArrays.finalize(d_left)
+            delete!(store, rightchildindex)
+            CuArrays.finalize(d_right)
             #Mem.free(d_right)
 
         end
@@ -874,13 +881,15 @@ cudacall(cudasumfinal, (Cint,Cint,Cint,CuPtr{Cfloat},CuPtr{Cfloat}, CuPtr{Cfloat
 #Mem.free(d_freqsflattened)
 #Mem.free(d_transprobsflattened)
 d_paramlogweights = CuArray(paramlogweights)
-d_finallogliks =  CuArray(numpairs)
+d_finallogliks =  CuArray(zeros(Float32, numpairs))
 cudacall(cudasumcats, (Cint,Cint,CuPtr{Cfloat},CuPtr{Cfloat}, CuPtr{Cfloat}), Cint(numratecats), Int32(numpairs), d_paramlogweights, d_logliks, d_finallogliks, blocks=div(numpairs+blocksize-1, blocksize), threads=blocksize)
 
 finallogliks = Array(d_finallogliks)
 CuArrays.finalize(d_finallogliks)
 CuArrays.finalize(d_logliks)
-CuArrays.finalize(store[1])
+root = store[1]
+delete!(store, 1)
+CuArrays.finalize(root)
 CuArrays.finalize(d_paramlogweights)
 #Mem.free(d_finallogliks)
 #Mem.free(d_logliks)

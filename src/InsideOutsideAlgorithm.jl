@@ -62,7 +62,7 @@ function safelog(x::Float64)
   end
 end
 
-
+export orderpair
 function orderpair(a::Float64, b::Float64)
   if a < b
     return a,b
@@ -71,7 +71,7 @@ function orderpair(a::Float64, b::Float64)
 end
 
 
-
+export quickExp
 function quickExp(v::Float64)
   if v < -57.0
     return 0.0
@@ -82,6 +82,7 @@ function quickExp(v::Float64)
   return exp(v)
 end
 
+export calculateKH99prior
 function calculateKH99prior(pairedsites::Array{Int,1})
   rules = Rule[]
   push!(rules, Rule('S', "sS",0.868534*0.894603, 0))
@@ -142,6 +143,7 @@ function calculateKH99prior(pairedsites::Array{Int,1})
   return ll
 end
 
+export readpairedlogprobs
 function readpairedlogprobs(infile)
   m = 0
   rin = open(infile,"r")
@@ -170,6 +172,7 @@ function readpairedlogprobs(infile)
   return pairedlogprobs
 end
 
+export getrnaprobs
 function getrnaprobs(fastafile)
   unpairedprior = Float64[0.337 0.207 0.202 0.254]
   pairedprior = Float64[0.007 0.004 0.011 0.127; 0.006 0.005 0.283 0.005; 0.023 0.275 0.006 0.045; 0.132 0.004 0.060 0.001]
@@ -213,6 +216,7 @@ function getrnaprobs(fastafile)
   return unpairedlogprobs, pairedlogprobs
 end
 
+export calculatedinucfreqs
 function calculatedinucfreqs(obsFreqs::Array{Float64,1}, lambdaGC::Float64, lambdaAT::Float64, lambdaGT::Float64)
   dinucfreqs = zeros(Float64,16)
 
@@ -241,6 +245,7 @@ function calculatedinucfreqs(obsFreqs::Array{Float64,1}, lambdaGC::Float64, lamb
   return dinucfreqs
 end
 
+export calculatenonevolutionaryprobs
 function calculatenonevolutionaryprobs(fastafile, unpairedlogprobs::Array{Float64,1}, pairedlogprobs::Array{Float64,2}, obsfreqs::Array{Float64,1}, lambdaGC::Float64, lambdaAT::Float64, lambdaGT::Float64)
   sequences = AbstractString[]
   len = 0
@@ -260,6 +265,7 @@ function calculatenonevolutionaryprobs(fastafile, unpairedlogprobs::Array{Float6
 
 end
 
+export readpairedlogprobs
 function readpairedlogprobs(pairedlogprobs::Array{Float64,2},infile)
   m = 0
   rin = open(infile,"r")
@@ -288,6 +294,7 @@ function readunpairedlogprobs(infile)
   return unpairedlogprobs
 end
 
+export computeinside
 function computeinside(unpairedlogprobs::Array{Float64,1}, pairedlogprobs::Array{Float64,2}, grammar::KH99, B::Float64=1.0)
   type1rules = grammar.type1rules
   type2rules = grammar.type2rules
@@ -436,6 +443,7 @@ function computeinsideblock(inside::Array{Float64,3}, unpairedlogprobs::Array{Fl
   return inside
 end
 
+export computeoutside
 function computeoutside(inside::Array{Float64,3}, unpairedlogprobs::Array{Float64,1}, pairedlogprobs::Array{Float64,2}, grammar::KH99)
   type1rules = grammar.type1rules
   type2rules = grammar.type2rules
@@ -474,6 +482,7 @@ function computeoutside(inside::Array{Float64,3}, unpairedlogprobs::Array{Float6
   return outside
 end
 
+export computebasepairprobs
 function computebasepairprobs(inside::Array{Float64,3}, outside::Array{Float64,3}, unpairedlogprobs::Array{Float64,1}, pairedlogprobs::Array{Float64,2}, grammar::KH99)
   type1rules = grammar.type1rules
   type2rules = grammar.type2rules
@@ -618,6 +627,7 @@ function samplestructurehelper(rng::AbstractRNG, inside::Array{Float64,3}, paire
   return calculateKH99prior(paired)
 end
 
+export samplestructure
 function samplestructure(rng::AbstractRNG, inside::Array{Float64,3}, pairedlogprobs::Array{Float64,2}, unpairedlogprobs::Array{Float64,1}, x::Int, y::Int, paired::Array{Int,1}, grammar::KH99, B::Float64)
   fill!(paired,0)
   priorll = samplestructurehelper(rng, inside, pairedlogprobs, unpairedlogprobs, 'S', x, y, paired, grammar, B)
@@ -669,6 +679,7 @@ function computeblock(block::Block, blen::Int, inside::Array{Float64,3}, unpaire
   return inside
 end
 
+export computeinsideparallel
 function computeinsideparallel(unpairedlogprobsin::Array{Float64,1}, pairedlogprobsin::Array{Float64,2}, grammar::KH99, B::Float64=1.0)
   type1rules = grammar.type1rules
   type2rules = grammar.type2rules
